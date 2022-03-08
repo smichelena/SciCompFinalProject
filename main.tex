@@ -1,0 +1,65 @@
+\documentclass{finalproject}
+\usepackage{listings}
+\usepackage{biblatex}
+\usepackage{pdfpages}
+\addbibresource{refs.bib}
+
+\title{Final Project: Bidomain Problem \\ \large{Scientific Computing \\ Technische Universität Berlin \\ Winter Semester 2021/2022}}
+\author{Henry Jacobson\\Ryan Quinn\\Santos Michelena}
+\date{\today}
+
+\newcommand{\R}{\mathbb{R}}
+\bibliographystyle{IEEetran}
+\bibliography{refs.bib}
+
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{\textcolor{faded}{WiSe 21/22\\Henry Jacobson}}
+\chead{\textcolor{faded}{Scientific Computing - Bidomain Problem\\Ryan Quinn}}
+\rhead{\textcolor{faded}{TU Berlin\\Santos Michelena}}
+
+
+
+\begin{document}
+\maketitle
+
+\begin{abstract} % A bit extraneous with an introduction. Remove one.
+Some abstract
+\end{abstract}
+
+\section{Introduction} % A bit extraneous with an abstract. Remove one.
+\section{Formulation of Bidomain problem}
+Some text from \cite{eth_bou}
+\section{Discretization}
+\subsection{Finite Volume Space Discretization}
+\subsection{Time Discretization}
+
+\section{Solution of Discretized Problem}
+
+\section{Simulation Results}
+
+\section{Performance}
+
+\section{Optional: 2D Solution and Results}
+\section{Optional: Anisotropic Conductivity}
+\section{Optional: Alternative Time-Stepping Methods}
+
+
+\section{Conclusion}
+Execute
+\begin{verbatim}
+    ssh -L 1234:localhost:1234 root@julia.fourier.one
+\end{verbatim}
+and then open
+\begin{verbatim}
+     http://localhost:1234/?secret=mkEnljvD
+\end{verbatim}
+in your browser. If not started execute
+\begin{verbatim}
+    julia startbidomain.jl
+\end{verbatim}
+$C^q$
+\printbibliography
+\clearpage
+\section*{Appendix}
+\end{document}
