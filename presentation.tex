@@ -1,0 +1,71 @@
+\documentclass{beamer}
+\usepackage[utf8]{inputenc}
+\usepackage{graphicx}
+\usetheme{Madrid}
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+\graphicspath{../SciCompFinalProject}
+
+\newcommand{\pth}[1]{\left(#1\right)}
+\newcommand{\brc}[1]{\left\{#1\right\}}
+\newcommand{\bra}[1]{\left[#1\right]}
+\newcommand{\dd}{\text{d}}
+\newcommand{\eps}{\varepsilon}
+
+\title[Scientific Computing WiSe 2021/22]{The Bidomain problem}
+\subtitle{A Julia implementation with VoronoiFVM.jl}
+\author[{\fontsize{5.5}{6}\selectfont Henry Jacobson \& Santos Michelena \& Ryan Quinn  \hspace{5mm}}]{Henry Jacobson \\ Santos Michelena \\ Ryan Quinn} %see if theres a better way to do this, this is awful
+\institute{Technische Universität Berlin}
+\date[Prof. Dr. Jürgen Fuhrmann]{March 2022}
+
+\begin{document}
+
+\frame{\titlepage}
+
+\begin{frame}
+	\frametitle{Contents}
+	\tableofcontents
+\end{frame}
+
+\section{Problem introduction}
+
+\begin{frame}
+	\frametitle{What is the bidomain problem?}
+	
+	The bidomain problem is a system of partial differential equations modeling the propagation of electric signals throughout cardiac tissue. \cite{intro} According to \cite{paper}, this system is given by:
+	
+	\begin{block}{Bidomain problem}
+		\begin{align*}
+			\frac{\partial u}{\partial t} &= \frac{1}{\eps}f(u,v)+
+			\nabla\cdot(\sigma_i\nabla u)+\nabla\cdot(\sigma_i\nabla u_e)\\
+			0&=\nabla\cdot(\sigma_i\nabla u+(\sigma_i +\sigma_e)\nabla u_e)\\
+			\frac{\partial v}{\partial t} &= \eps g(u,v).
+		\end{align*}
+	\end{block}
+	
+	
+	
+\end{frame}
+
+
+
+\begin{frame}
+	\frametitle{Bibliography}
+	
+	\begin{thebibliography}{3}
+		\bibitem{paper} 
+		Ethier, Marc; Bourgault, Yves Semi-Implicit Time-Discretization Schemes For The Bidomain Model, Siam Journal On Numerical Analysis (2008)
+		
+		\bibitem{intro}
+		Hooke, N.; Henriquez, C.S.; Lanzkron, P.; Rose, D. Linear Algebraic Transformations Of The Bidomain Equations: Implications For Numerical Methods, Mathematical Biosciences (1994)
+		
+		\bibitem{library}
+		Fuhrmann, Jürgen Voronoifvm.Jl: Finite Volume Solver For Coupled Nonlinear Partial Differential Equations, Zenodo (2022)
+	\end{thebibliography}
+	
+\end{frame}
+
+
+
+\end{document}
