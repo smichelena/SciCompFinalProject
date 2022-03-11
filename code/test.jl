@@ -1,8 +1,18 @@
 ### A Pluto.jl notebook ###
-# v0.17.5
+# v0.17.7
 
 using Markdown
 using InteractiveUtils
+
+# This Pluto notebook uses @bind for interactivity. When running this notebook outside of Pluto, the following 'mock version' of @bind gives bound variables a default value (instead of an error).
+macro bind(def, element)
+    quote
+        local iv = try Base.loaded_modules[Base.PkgId(Base.UUID("6e696c72-6542-2067-7265-42206c756150"), "AbstractPlutoDingetjes")].Bonds.initial_value catch; b -> missing; end
+        local el = $(esc(element))
+        global $(esc(def)) = Core.applicable(Base.get, el) ? Base.get(el) : iv(el)
+        el
+    end
+end
 
 # ╔═╡ bfef8ade-0b16-4a28-86d7-7e91876519c9
 begin
@@ -161,12 +171,8 @@ begin
 	β = 1.0
 	γ = 0.5
 	ε = 0.1
-	σᵢ_1D = 1.0
-	σₑ_1D = 1.0
-	σᵢ_2D = 1
-	σₑ_2D = 1
-	# σᵢ_2D = 25*[0.263 0; 0 0.0263]
-	# σₑ_2D = 25*[0.263 0; 0 0.1087]
+	σᵢ = 1.0
+	σₑ = 1.0
 end;
 
 # ╔═╡ d3b4bdc4-f17f-4a83-9ddc-bfdd1ea7f26c
@@ -266,25 +272,25 @@ let
 end
 
 # ╔═╡ 6cb8de00-62a6-46b0-a367-21a282e4ff89
-function create_physics(σᵢ, σₑ)
-	physics = VoronoiFVM.Physics(
-		storage = function(y,u,node)
-			y[1] = u[1]
-			y[2] = 0
-			y[3] = u[3]
-		end,
-		flux = function(y,u,edge)
-			y[1] = -σᵢ*(u[1,2]-u[1,1] + u[2,2] - u[2,1])
-			y[2] = σᵢ*(u[1,2]-u[1,1]) + (σᵢ+σₑ)*(u[2,2]-u[2,1])
-			y[3] = 0
-		end,
-		reaction = function(y,u,node)
-			y[1] = -f(u[1],u[3])/ε
-			y[2] = 0
-			y[3] = -ε*g(u[1],u[3])
-		end,
-	)
-end
+physics = VoronoiFVM.Physics(
+	storage = function(y,u,node)
+		y[1] = u[1]
+		y[2] = 0
+		y[3] = u[3]
+	end,
+	flux = function(y,u,edge)
+		nspecies=3
+		y[1] = -σᵢ*(u[1,2]-u[1,1] + u[2,2] - u[2,1])
+		y[2] = σᵢ*(u[1,2]-u[1,1]) + (σᵢ+σₑ)*(u[2,2]-u[2,1])
+		y[3] = 0
+	end,
+	reaction = function(y,u,node)
+		node.index
+		y[1] = -f(u[1],u[3])/ε
+		y[2] = 0
+		y[3] = -ε*g(u[1],u[3])
+	end,
+)
 
 # ╔═╡ 31017d7c-d875-442f-b77c-9abc828f42d6
 """
@@ -304,9 +310,6 @@ function bidomain(;N=100, dim=1, Δt=1e-3, T=T, Plotter=Plots, dim2_special=fals
 		end
 	end
 
-	σᵢ, σₑ = (dim == 1 || !dim2_special) ? (σᵢ_1D, σₑ_1D) : (σᵢ_2D, σₑ_2D)
-	physics = create_physics(σᵢ,σₑ)
-	
 	sys = VoronoiFVM.System(
 		xgrid,
 		physics,
@@ -315,10 +318,7 @@ function bidomain(;N=100, dim=1, Δt=1e-3, T=T, Plotter=Plots, dim2_special=fals
 
 	boundaries = (dim == 1 ? 2 : 4)
 	enable_species!(sys, species=[1,2,3])
-	if dim==1
-		boundary_dirichlet!(sys,2,1,0)
-	else
-	end
+	boundary_dirichlet!(sys,2,1,0)
 	for ispec ∈ [1 3]
 		for ibc=1:boundaries
 			boundary_neumann!(sys,ispec,ibc,0)
@@ -359,10 +359,13 @@ species = [L"u", L"u_e", L"v"]
 dim = 1; N = 1000; Δt = 1e-1;
 
 # ╔═╡ 78e23bc8-da0f-4ba8-85ca-4d6f4b6d5538
-gridx, gridt, sol1, vis1 = bidomain(N=(3,3),dim=2,T=1,Δt=10e-1);
+gridx, gridt, sol1, vis1 = bidomain(T=1,Δt=1e-1);
 
 # ╔═╡ 88540b7a-90da-45a6-9025-fccafa4a19ff
 xgrid, tgrid, sol, vis = bidomain(dim=dim, N=N, Δt=Δt);
+
+# ╔═╡ 4772c2e1-9399-4a88-9c31-cd334d2c834b
+t = @bind t Slider(tgrid, default=0, show_value=true)
 
 # ╔═╡ 45c86875-d68a-40d3-b340-d2b4af94e849
 function plot_at_t(t,vis,xgrid,sol)
@@ -480,7 +483,7 @@ function images_for_gif(spec, folder, xgrid, sol; steps=5)
 	folder = "images/"*folder*"_"*string(spec)*"/"
 
 	grid_vis = GridVisualizer(resolution=(500,500), dim=2, Plotter=PyPlot)
-	for ts=2:steps:size(sol)[3]
+	for ts=1:steps:size(sol)[3]
 		scalarplot!(grid_vis,
 			xgrid,sol[spec,:,ts], Plotter=PyPlot, colormap=:hot, colorlevels=100,
 			colorbar=false)
@@ -857,9 +860,9 @@ version = "1.13.0"
 
 [[FillArrays]]
 deps = ["LinearAlgebra", "Random", "SparseArrays", "Statistics"]
-git-tree-sha1 = "0dbc5b9683245f905993b51d2814202d75b34f1a"
+git-tree-sha1 = "4c7d3757f3ecbcb9055870351078552b7d1dbd2d"
 uuid = "1a297f60-69ca-5386-bcde-b61e274b549b"
-version = "0.13.1"
+version = "0.13.0"
 
 [[FiniteDiff]]
 deps = ["ArrayInterface", "LinearAlgebra", "Requires", "SparseArrays", "StaticArrays"]
@@ -1033,9 +1036,9 @@ version = "0.5.3"
 
 [[InverseFunctions]]
 deps = ["Test"]
-git-tree-sha1 = "91b5dcf362c5add98049e6c29ee756910b03051d"
+git-tree-sha1 = "a7254c0acd8e62f1ac75ad24d5db43f5f19f3c65"
 uuid = "3587e190-3f89-42d0-90ee-14403ec27112"
-version = "0.1.3"
+version = "0.1.2"
 
 [[IrrationalConstants]]
 git-tree-sha1 = "7fd44fd4ff43fc60815f8e764c0f352b83c49151"
@@ -1191,7 +1194,7 @@ uuid = "38a345b3-de98-5d2b-a5d3-14cd9215e700"
 version = "2.36.0+0"
 
 [[LinearAlgebra]]
-deps = ["Libdl"]
+deps = ["Libdl", "libblastrampoline_jll"]
 uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 
 [[LogExpFunctions]]
@@ -1288,6 +1291,10 @@ deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "887579a3eb005446d514ab7aeac5d1d027658b8f"
 uuid = "e7412a2a-1a6e-54c0-be00-318e2571c051"
 version = "1.3.5+1"
+
+[[OpenBLAS_jll]]
+deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
+uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
 
 [[OpenLibm_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -1425,7 +1432,7 @@ deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]
 uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 
 [[Random]]
-deps = ["Serialization"]
+deps = ["SHA", "Serialization"]
 uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 
 [[RecipesBase]]
@@ -1901,6 +1908,10 @@ git-tree-sha1 = "5982a94fcba20f02f42ace44b9894ee2b140fe47"
 uuid = "0ac62f75-1d6f-5e53-bd7c-93b484bb37c0"
 version = "0.15.1+0"
 
+[[libblastrampoline_jll]]
+deps = ["Artifacts", "Libdl", "OpenBLAS_jll"]
+uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
+
 [[libfdk_aac_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "daacc84a041563f965be61859a36e17c4e4fcd55"
@@ -1971,6 +1982,7 @@ version = "0.9.1+5"
 # ╠═7699e496-d0bd-4c39-9398-b90649694ea8
 # ╠═78e23bc8-da0f-4ba8-85ca-4d6f4b6d5538
 # ╠═88540b7a-90da-45a6-9025-fccafa4a19ff
+# ╠═4772c2e1-9399-4a88-9c31-cd334d2c834b
 # ╠═45c86875-d68a-40d3-b340-d2b4af94e849
 # ╠═d477647c-de1f-4dbf-b982-c1577adcf398
 # ╠═6fcf5e8c-c44e-4684-b512-cef6031ad66b
