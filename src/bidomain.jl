@@ -161,12 +161,10 @@ begin
 	β = 1.0
 	γ = 0.5
 	ε = 0.1
-	σᵢ_1D = 1.0
-	σₑ_1D = 1.0
-	σᵢ_2D = 1
-	σₑ_2D = 1
-	# σᵢ_2D = 25*[0.263 0; 0 0.0263]
-	# σₑ_2D = 25*[0.263 0; 0 0.1087]
+	σᵢ_normal = 1.0
+	σₑ_normal = 1.0
+	σᵢ_anisotropic = 25*[0.263 0; 0 0.0263]
+	σₑ_anisotropic = 25*[0.263 0; 0 0.1087]
 end;
 
 # ╔═╡ d3b4bdc4-f17f-4a83-9ddc-bfdd1ea7f26c
@@ -290,7 +288,7 @@ end
 function save_initial(init)
 	mkpath("../csv")
 	df = DataFrame(init, :auto)
-	CSV.write("../csv/initial_2D.csv")
+	CSV.write("../csv/initial_2D.csv", df)
 end
 
 # ╔═╡ f19b980c-7d6c-41c6-99af-8475f7aa72db
@@ -305,10 +303,10 @@ species = [L"u", L"u_e", L"v"]
 dim = 1; N = 1000; Δt = 1e-1;
 
 # ╔═╡ 6ef697e9-a4b8-446e-bbb8-b577cea0161d
-function initial_cond(sys, xgrid, Tinit_solve, dim, dim2_special, use_csv)
+function initial_cond(sys, xgrid, Tinit_solve, dim, initial2D, use_csv)
 	init = unknowns(sys)
 	U = unknowns(sys)
-	if dim==2 && dim2_special
+	if dim==2 && initial2D
 		if use_csv
 			init = get_initial_data()
 		else
@@ -333,11 +331,11 @@ end
 
 Solves the bidomain problem in `dim` dimensions with `N` grid points in each dimension. Uses Δt as time step until final time tₑ.
 """
-function bidomain(;N=100, dim=1, Δt=1e-3, T=T, 
-		Plotter=Plots, dim2_special=false, Tinit_solve=40, use_csv=false)
+function bidomain(;N=100, dim=1, Δt=1e-3, T=30, Plotter=Plots, 
+		initial2D=false, Tinit_solve=40, use_csv=false, anisotropic=false)
 	xgrid = create_grid(N, dim)
 
-	σᵢ, σₑ = (dim == 1 || !dim2_special) ? (σᵢ_1D, σₑ_1D) : (σᵢ_2D, σₑ_2D)
+	σᵢ, σₑ = anisotropic ? (σᵢ_anisotropic, σₑ_anisotropic) : (σᵢ_normal, σₑ_normal)
 	physics = create_physics(σᵢ,σₑ)
 	
 	sys = VoronoiFVM.System(
@@ -359,11 +357,11 @@ function bidomain(;N=100, dim=1, Δt=1e-3, T=T,
 	end
 
 
-	init = initial_cond(sys, xgrid, Tinit_solve, dim, dim2_special, use_csv)
+	init = initial_cond(sys, xgrid, Tinit_solve, dim, initial2D, use_csv)
 	U = unknowns(sys)
 
 	SolArray = copy(init)
-	tgrid = dim2_special ? (Tinit_solve:Δt:2T) : (0:Δt:T)
+	tgrid = initial2D ? (Tinit_solve:Δt:T+Tinit_solve) : (0:Δt:T)
 	for t ∈ tgrid[2:end]
 		solve!(U, init, sys; tstep=Δt)
 		init .= U
@@ -377,7 +375,7 @@ end
 gridx, gridt, sol1, vis1 = bidomain(N=(3,3),dim=2,T=1,Δt=10e-1);
 
 # ╔═╡ 88540b7a-90da-45a6-9025-fccafa4a19ff
-xgrid, tgrid, sol, vis = bidomain(dim=dim, N=N, Δt=Δt);
+xgrid, tgrid, sol, vis = bidomain(dim=dim, N=N, T=T, Δt=Δt);
 
 # ╔═╡ 45c86875-d68a-40d3-b340-d2b4af94e849
 function plot_at_t(t,vis,xgrid,sol)
@@ -399,9 +397,10 @@ plot_at_t(11,vis,xgrid,sol)
 
 # ╔═╡ 6fcf5e8c-c44e-4684-b512-cef6031ad66b
 begin
-	@gif for t in 0:Δt*5:T
+	anim = @animate for t in 0:Δt*5:T
 		plot_at_t(t,vis,xgrid,sol)
 	end
+	gif(anim, "../movies/1D_solution.gif", fps=15)
 end
 
 # ╔═╡ 882e929d-0188-4907-92ef-d9066b92148c
@@ -445,6 +444,7 @@ function contour_plot(spec)
 	PyPlot.ylabel(L"t")
 	figure=PyPlot.gcf()
 	figure.set_size_inches(7,7)
+	PyPlot.savefig("../img/st_contour_plot_species_"*string(spec))
 	figure
 end
 
@@ -460,12 +460,12 @@ contour_plot(3)
 # ╔═╡ a24ebb01-038c-4107-b730-887a86a14fe7
 begin
 	dim₂=2; N₂ = (100,25); Δt₂ = 1e-1;
-	xgrid₂, tgrid₂, sol₂, vis₂ = bidomain(dim=dim₂, N=N₂, Δt=Δt₂, Plotter=PyPlot);
+	xgrid₂, tgrid₂, sol₂, vis₂ = bidomain(dim=dim₂, N=N₂,T=T, Δt=Δt₂, Plotter=PyPlot);
 end;
 
 # ╔═╡ 0edfe024-2786-4570-96f2-f02a083553f6
-function contour_2d_at_t(spec, t, xgrid, sol)
-	tₛ = Int16(round(t/Δt₂))+1
+function contour_2d_at_t(spec, t, Δt, xgrid, sol)
+	tₛ = Int16(round(t/Δt))+1
 	p = scalarplot(
 		xgrid,sol[spec,:,tₛ], Plotter=PyPlot, colormap=:hot, 
 		title="2D problem with 1D problem setup for "*species[spec]*
@@ -478,21 +478,29 @@ function contour_2d_at_t(spec, t, xgrid, sol)
 end
 
 # ╔═╡ 4becbe30-d7a1-4949-a494-7f9bba8ed4c9
-contour_2d_at_t(2,3,xgrid₂,sol₂)
+contour_2d_at_t(2,3,Δt₂,xgrid₂,sol₂)
 
 # ╔═╡ c1d04237-1696-4c08-9e78-7e7c0d659d0b
 begin
 	dim₃=2; N₃ = (100,25); Δt₃ = 1e-1;
 	xgrid₃, tgrid₃, sol₃, vis₃ = bidomain(
-		dim=dim₃, N=N₃, Δt=Δt₃, Plotter=PyPlot, dim2_special=true);
+		dim=dim₃, N=N₃, T=T, Δt=Δt₃, Plotter=PyPlot, initial2D=true, use_csv=true);
+end;
+
+# ╔═╡ 8bf36fd9-abf0-49fc-b4f3-0f10ba1ade1f
+begin
+	dim₄=2; N₄=(100,25); Δt₄=1e-1;
+	xgrid₄, tgrid₄, sol₄, vis₄ = bidomain(
+		dim=dim₄, N=N₄, T=T, Δt=Δt₄, Plotter=PyPlot, initial2D=true,
+		anisotropic=true);
 end;
 
 # ╔═╡ c7106eb9-b54d-4473-8ff4-2b8707260cec
-contour_2d_at_t(3,0,xgrid₃,sol₃)
+contour_2d_at_t(2,21,Δt₃,xgrid₃,sol₃)
 
 # ╔═╡ 557cc2d0-780a-4f6f-b5c9-6ae9bc31b014
 function images_for_gif(spec, folder, xgrid, sol; steps=5)
-	folder = "../images/"*folder*"_"*string(spec)*"/"
+	folder = "../img/"*folder*"_"*string(spec)*"/"
 	mkpath(folder)
 
 	grid_vis = GridVisualizer(resolution=(500,500), dim=2, Plotter=PyPlot)
@@ -2064,6 +2072,7 @@ version = "0.9.1+5"
 # ╠═0edfe024-2786-4570-96f2-f02a083553f6
 # ╠═4becbe30-d7a1-4949-a494-7f9bba8ed4c9
 # ╠═c1d04237-1696-4c08-9e78-7e7c0d659d0b
+# ╠═8bf36fd9-abf0-49fc-b4f3-0f10ba1ade1f
 # ╠═c7106eb9-b54d-4473-8ff4-2b8707260cec
 # ╠═557cc2d0-780a-4f6f-b5c9-6ae9bc31b014
 # ╠═33539ff5-9634-457d-991e-6af44184ce62

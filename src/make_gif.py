@@ -17,10 +17,10 @@ if __name__ == '__main__':
     if len(sys.argv) == 1:
         print('Usage: python3 make_gif.py <"make_all"|species> [optional]<"test">') 
     elif sys.argv[1] == 'make_all':
-        for directory in os.listdir('../images'):
-            make_a_gif(f'../images/{directory}/')
+        for directory in os.listdir('../img'):
+            make_a_gif(f'../img/{directory}/')
     else:
-        directory = f'../images/contour_plot_2D_species_{sys.argv[1]}/'
+        directory = f'../img/contour_plot_2D_species_{sys.argv[1]}/'
         if len(sys.argv) > 2:
-            directory = f'../images/contour_plot_species_{sys.argv[1]}/'
+            directory = f'../img/contour_plot_species_{sys.argv[1]}/'
         make_a_gif(directory)
