@@ -15,7 +15,7 @@ The full report detailing this work and the results can be found in report/main.
 
 # Results 
 TODO: Import results from img/  i.e.
-![alt text](./movies//moviecontour_plot_species_1.gif)
+![alt text](./movies//1D_solution.gif)
 
 
 
