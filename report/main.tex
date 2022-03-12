@@ -24,7 +24,7 @@
 \maketitle
 
 \begin{abstract} % A bit extraneous with an introduction. Remove one.
-Some abstract
+Some abstrac
 \end{abstract}
 
 \section{Introduction} % A bit extraneous with an abstract. Remove one.
@@ -95,8 +95,8 @@ Again convert these terms to a sum of the integral over each side of the volume,
 \begin{align*}
     0 &= \sum_{l \in N_k}\int_{s_{kl}} \sigma_i \nabla u \cdot \overrightarrow{n_{kl}}ds +
     \sum_{m \in B_k}\int_{\gamma_{kl}} \sigma_i \nabla u \cdot \overrightarrow{n_{m}}ds \\
-    &+ \sum_{l \in N_k}\int_{s_{kl}} (\sigma_i + \sigma_e) \nabla u_e \cdot \overrightarrow{n_{kl}}ds +
-    \sum_{m \in B_k}\int_{\gamma_{kl}} (\sigma_i + \sigma_e)\nabla u_e \cdot \overrightarrow{n_{m}}ds
+    &+ \sum_{l \in N_k}\int_{s_{kl}} (\sigma_i + \sigma_e) \nabla u_e \cdot \overrightarrow{n}_{kl}ds +
+    \sum_{m \in B_k}\int_{\gamma_{kl}} (\sigma_i + \sigma_e)\nabla u_e \cdot \overrightarrow{n}_{m}ds
 \end{align*}
 Again approximate the dot products as finite differences, and replace the integrals by the length of the cell border:
 \begin{align*}
@@ -105,15 +105,87 @@ Again approximate the dot products as finite differences, and replace the integr
 &+ \sum_{l \in N_k} |s_{kl}| (\sigma_i+\sigma_e) ( \frac{u_{e_k} - u_{e_l}}{|x_k - x_l|} ) + 
 \sum_{m \in B_k} |\gamma_{km}| (\sigma_i+\sigma_e) ( \frac{u_{e_k} - u_{e_l}}{|x_k - x_l|} ) 
 \end{align*}
-Combine terms and move the boundary conditions to the opposite side:
+Move the boundary conditions to the opposite side:
 \begin{align*}
-\sum_{l \in N_k} |s_{kl}| \sigma_i ( \frac{u_k - u_l}{|x_k - x_l|} ) 
+\sum_{l \in N_k} |s_{kl}| \sigma_i ( \frac{u_k - u_l}{|x_k - x_l|}
 + \sum_{l \in N_k} |s_{kl}| (\sigma_i+\sigma_e) ( \frac{u_{e_k} - u_{e_l}}{|x_k - x_l|} ) = 
 -\sum_{m \in B_k} |\gamma_{km}| \sigma_i ( \frac{u_k - u_l}{|x_k - x_l|} )  
--\sum_{m \in B_k} |\gamma_{km}| (\sigma_i+\sigma_e) ( \frac{u_{e_k} - u_{e_l}}{|x_k - x_l|} ) 
+-\sum_{m \in B_k} |\gamma_{km}| (\sigma_i+\sigma_e) ( \frac{u_{e_k} - u_{e_l}}{|x_k - x_l|}) 
 \end{align*}
 
+\subsection{Space discretization of equation 3}
+With 
+\begin{align*}
+\frac{\partial v}{\partial t} - \epsilon(u + \beta - \varphi v) = 0
+\end{align*}
+We take the integral as before with respect to the volume $\omega_k$:
+
+\begin{align*}
+\int_{\omega_k}\frac{\partial v}{\partial t} d\omega - \int_{\omega_k} \epsilon(u + \beta - \varphi v)d\omega = 0
+\end{align*}
+The integral is simply a multiplication by the area of the volume:
+\begin{align*}
+|\omega_k|\frac{\partial v}{\partial t} - \epsilon |\omega_k| (u + \beta - \varphi v) = 0
+\end{align*}
+
+This concludes the space discretization.
 \subsection{Time Discretization}
+The time discretization is achieved by discretizing in time the third equation which is the only one dependent on time. 
+
+There are a few possibilities for the time discretization:
+
+\subsubsection{Implicit Euler}
+With an implicit euler we approximate $\frac{\partial v}{\partial t}$ by a finite difference between the current time step and the last time step. This provides an easy implementation as all we need to implement this approximation is a storage of the previous v. We can then simply solve the resulting system to find the current v.
+\subsubsection{Explicit Euler}
+TODO: I think part of the answer here is that it is a coupled partial differential equation. We can't explicitly solve for v in this timestep because it will be in terms of u - which itself is dependent on v. 
+
+i.e. There is no 
+\subsubsection{Implicit Explicit Methods (IMEX)}
+
+Here we use an implicit Euler method.
+
+This is done for each time step. The resulting discretized system is solved at each time step.
+
+
+
+\begin{align*}
+|\omega_k|\frac{\partial v}{\partial t} - \epsilon |\omega_k| (u + \beta - \varphi v) = 0
+\end{align*}
+We approximate:
+\begin{align*}
+ |\omega_k|\frac{\partial v}{\partial t} \approx \frac{v_i - v_{i-1}}{\Delta t}  
+\end{align*}
+Where $i$ is the current time step. 
+
+The third equation, discretized in time as well as space, is then:
+
+\begin{align*}
+|\omega_k| \frac{v_i - v_{i-1}}{\Delta t}  - \epsilon |\omega_k| (u + \beta - \varphi v) = 0
+\end{align*}
+
+\subsection{Discretization summary}
+
+In total, for the discretization of the problem, we are left with a nonlinear system of equations that must be solved at each time step:
+
+
+\begin{align*}
+\sum_{l \in N_k} |s_{kl}| \sigma_i ( \frac{u_k - u_l + u_{e_k} - u_{e_l}}{|x_k - x_l|} )
++ \frac{|\omega_k|}{\epsilon}(u - \frac{u^3}{3} - v)
+&= -\sum_{m \in B_k} |\gamma_{km}| \sigma_i ( \frac{u_k - u_l + u_{e_k} - u_{e_l}}{|x_k - x_l|} )\\
+\sum_{l \in N_k} |s_{kl}| \sigma_i ( \frac{u_k - u_l}{|x_k - x_l|}
++ \sum_{l \in N_k} |s_{kl}| (\sigma_i+\sigma_e) ( \frac{u_{e_k} - u_{e_l}}{|x_k - x_l|} ) &= 
+-\sum_{m \in B_k} |\gamma_{km}| \sigma_i ( \frac{u_k - u_l}{|x_k - x_l|} )  
+-\sum_{m \in B_k} |\gamma_{km}| (\sigma_i+\sigma_e) ( \frac{u_{e_k} - u_{e_l}}{|x_k - x_l|})\\
+|\omega_k| \frac{v_i - v_{i-1}}{\Delta t}  - \epsilon |\omega_k|(u + \beta - \varphi v) &= 0
+\end{align*}
+Where: 
+\begin{itemize}
+	\item{$i$ is the current time step.}
+\end{itemize}
+
+
+
+
 
 \section{Solution of Discretized Problem}
 
@@ -127,19 +199,7 @@ Combine terms and move the boundary conditions to the opposite side:
 
 
 \section{Conclusion}
-Execute
-\begin{verbatim}
-    ssh -L 1234:localhost:1234 root@julia.fourier.one
-\end{verbatim}
-and then open
-\begin{verbatim}
-     http://localhost:1234/?secret=mkEnljvD
-\end{verbatim}
-in your browser. If not started execute
-\begin{verbatim}
-    julia startbidomain.jl
-\end{verbatim}
-$C^q$
+
 \printbibliography
 \clearpage
 \section*{Appendix}
