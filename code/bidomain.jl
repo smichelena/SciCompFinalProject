@@ -274,7 +274,7 @@ function create_physics(σᵢ, σₑ)
 			y[3] = u[3]
 		end,
 		flux = function(y,u,edge)
-			y[1] = -σᵢ*(u[1,2]-u[1,1] + u[2,2] - u[2,1])
+			y[1] = -σᵢ*(u[1,2]-u[1,1] + u[2,2]-u[2,1])
 			y[2] = σᵢ*(u[1,2]-u[1,1]) + (σᵢ+σₑ)*(u[2,2]-u[2,1])
 			y[3] = 0
 		end,
@@ -288,6 +288,7 @@ end
 
 # ╔═╡ d5315aef-978d-447f-85dc-a3becdc33078
 function save_initial(init)
+	mkpath("../csv")
 	df = DataFrame(init, :auto)
 	CSV.write("../csv/initial_2D.csv")
 end
