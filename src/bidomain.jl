@@ -286,6 +286,47 @@ function create_physics(σᵢ, σₑ)
 	)
 end
 
+# ╔═╡ d5315aef-978d-447f-85dc-a3becdc33078
+function save_initial(init)
+	mkpath("../csv")
+	df = DataFrame(init, :auto)
+	CSV.write("../csv/initial_2D.csv", df)
+end
+
+# ╔═╡ f19b980c-7d6c-41c6-99af-8475f7aa72db
+function get_initial_data()
+	Array(DataFrame(CSV.File("../csv/initial_2D.csv")))
+end
+
+# ╔═╡ 8c168042-b17e-434f-b5da-423875d6cc37
+species = [L"u", L"u_e", L"v"]
+
+# ╔═╡ 7699e496-d0bd-4c39-9398-b90649694ea8
+dim = 1; N = 1000; Δt = 1e-1;
+
+# ╔═╡ 6ef697e9-a4b8-446e-bbb8-b577cea0161d
+function initial_cond(sys, xgrid, Tinit_solve, dim, dim2_special, use_csv)
+	init = unknowns(sys)
+	U = unknowns(sys)
+	if dim==2 && dim2_special
+		if use_csv
+			init = get_initial_data()
+		else
+			inival = map(u⃗₀_2D, xgrid)
+			init .= [tuple[k] for tuple in inival, k in 1:3]'
+			for t ∈ 0:Δt:Tinit_solve
+				solve!(U, init, sys; tstep=Δt)
+				init .= U
+			end
+			save_initial(init)
+		end
+	else
+		inival = map(u⃗₀, xgrid)
+		init .= [tuple[k] for tuple in inival, k in 1:3]'
+	end
+	init
+end
+
 # ╔═╡ 31017d7c-d875-442f-b77c-9abc828f42d6
 """
 	bidomain(;N=100, dim=1, Δt=1e-4, tₑ=T)
@@ -330,47 +371,6 @@ function bidomain(;N=100, dim=1, Δt=1e-3, T=30,
 	end
 	vis = GridVisualizer(resolution=(400,300), dim=dim, Plotter=Plotter)
 	return xgrid, tgrid, SolArray, vis, sys
-end
-
-# ╔═╡ d5315aef-978d-447f-85dc-a3becdc33078
-function save_initial(init)
-	mkpath("../csv")
-	df = DataFrame(init, :auto)
-	CSV.write("../csv/initial_2D.csv", df)
-end
-
-# ╔═╡ f19b980c-7d6c-41c6-99af-8475f7aa72db
-function get_initial_data()
-	Array(DataFrame(CSV.File("../csv/initial_2D.csv")))
-end
-
-# ╔═╡ 8c168042-b17e-434f-b5da-423875d6cc37
-species = [L"u", L"u_e", L"v"]
-
-# ╔═╡ 7699e496-d0bd-4c39-9398-b90649694ea8
-dim = 1; N = 1000; Δt = 1e-1;
-
-# ╔═╡ 6ef697e9-a4b8-446e-bbb8-b577cea0161d
-function initial_cond(sys, xgrid, Tinit_solve, dim, dim2_special, use_csv)
-	init = unknowns(sys)
-	U = unknowns(sys)
-	if dim==2 && dim2_special
-		if use_csv
-			init = get_initial_data()
-		else
-			inival = map(u⃗₀_2D, xgrid)
-			init .= [tuple[k] for tuple in inival, k in 1:3]'
-			for t ∈ 0:Δt:Tinit_solve
-				solve!(U, init, sys; tstep=Δt)
-				init .= U
-			end
-			save_initial(init)
-		end
-	else
-		inival = map(u⃗₀, xgrid)
-		init .= [tuple[k] for tuple in inival, k in 1:3]'
-	end
-	init
 end
 
 # ╔═╡ 78e23bc8-da0f-4ba8-85ca-4d6f4b6d5538
