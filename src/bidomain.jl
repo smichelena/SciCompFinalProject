@@ -397,9 +397,10 @@ plot_at_t(11,vis,xgrid,sol)
 
 # ╔═╡ 6fcf5e8c-c44e-4684-b512-cef6031ad66b
 begin
-	@gif for t in 0:Δt*5:T
+	anim = @animate for t in 0:Δt*5:T
 		plot_at_t(t,vis,xgrid,sol)
 	end
+	gif(anim, "../movies/1D_solution.gif", fps=15)
 end
 
 # ╔═╡ 882e929d-0188-4907-92ef-d9066b92148c
@@ -443,6 +444,7 @@ function contour_plot(spec)
 	PyPlot.ylabel(L"t")
 	figure=PyPlot.gcf()
 	figure.set_size_inches(7,7)
+	PyPlot.savefig("../img/st_contour_plot_species_"*string(spec))
 	figure
 end
 
