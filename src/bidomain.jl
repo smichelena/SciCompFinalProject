@@ -161,12 +161,10 @@ begin
 	β = 1.0
 	γ = 0.5
 	ε = 0.1
-	σᵢ_1D = 1.0
-	σₑ_1D = 1.0
-	σᵢ_2D = 1
-	σₑ_2D = 1
-	# σᵢ_2D = 25*[0.263 0; 0 0.0263]
-	# σₑ_2D = 25*[0.263 0; 0 0.1087]
+	σᵢ_normal = 1.0
+	σₑ_normal = 1.0
+	σᵢ_anisotropic = 25*[0.263 0; 0 0.0263]
+	σₑ_anisotropic = 25*[0.263 0; 0 0.1087]
 end;
 
 # ╔═╡ d3b4bdc4-f17f-4a83-9ddc-bfdd1ea7f26c
@@ -305,10 +303,10 @@ species = [L"u", L"u_e", L"v"]
 dim = 1; N = 1000; Δt = 1e-1;
 
 # ╔═╡ 6ef697e9-a4b8-446e-bbb8-b577cea0161d
-function initial_cond(sys, xgrid, Tinit_solve, dim, dim2_special, use_csv)
+function initial_cond(sys, xgrid, Tinit_solve, dim, initial2D, use_csv)
 	init = unknowns(sys)
 	U = unknowns(sys)
-	if dim==2 && dim2_special
+	if dim==2 && initial2D
 		if use_csv
 			init = get_initial_data()
 		else
@@ -333,11 +331,11 @@ end
 
 Solves the bidomain problem in `dim` dimensions with `N` grid points in each dimension. Uses Δt as time step until final time tₑ.
 """
-function bidomain(;N=100, dim=1, Δt=1e-3, T=30, 
-		Plotter=Plots, dim2_special=false, Tinit_solve=40, use_csv=false)
+function bidomain(;N=100, dim=1, Δt=1e-3, T=30, Plotter=Plots, 
+		initial2D=false, Tinit_solve=40, use_csv=false, anisotropic=false)
 	xgrid = create_grid(N, dim)
 
-	σᵢ, σₑ = (dim == 1 || !dim2_special) ? (σᵢ_1D, σₑ_1D) : (σᵢ_2D, σₑ_2D)
+	σᵢ, σₑ = anisotropic ? (σᵢ_anisotropic, σₑ_anisotropic) : (σᵢ_normal, σₑ_normal)
 	physics = create_physics(σᵢ,σₑ)
 	
 	sys = VoronoiFVM.System(
@@ -359,11 +357,11 @@ function bidomain(;N=100, dim=1, Δt=1e-3, T=30,
 	end
 
 
-	init = initial_cond(sys, xgrid, Tinit_solve, dim, dim2_special, use_csv)
+	init = initial_cond(sys, xgrid, Tinit_solve, dim, initial2D, use_csv)
 	U = unknowns(sys)
 
 	SolArray = copy(init)
-	tgrid = dim2_special ? (Tinit_solve:Δt:T+Tinit_solve) : (0:Δt:T)
+	tgrid = initial2D ? (Tinit_solve:Δt:T+Tinit_solve) : (0:Δt:T)
 	for t ∈ tgrid[2:end]
 		solve!(U, init, sys; tstep=Δt)
 		init .= U
@@ -484,7 +482,15 @@ contour_2d_at_t(2,3,Δt₂,xgrid₂,sol₂)
 begin
 	dim₃=2; N₃ = (100,25); Δt₃ = 1e-1;
 	xgrid₃, tgrid₃, sol₃, vis₃ = bidomain(
-		dim=dim₃, N=N₃, T=T, Δt=Δt₃, Plotter=PyPlot, dim2_special=true, use_csv=true);
+		dim=dim₃, N=N₃, T=T, Δt=Δt₃, Plotter=PyPlot, initial2D=true, use_csv=true);
+end;
+
+# ╔═╡ 8bf36fd9-abf0-49fc-b4f3-0f10ba1ade1f
+begin
+	dim₄=2; N₄=(100,25); Δt₄=1e-1;
+	xgrid₄, tgrid₄, sol₄, vis₄ = bidomain(
+		dim=dim₄, N=N₄, T=T, Δt=Δt₄, Plotter=PyPlot, initial2D=true,
+		anisotropic=true);
 end;
 
 # ╔═╡ c7106eb9-b54d-4473-8ff4-2b8707260cec
@@ -2064,6 +2070,7 @@ version = "0.9.1+5"
 # ╠═0edfe024-2786-4570-96f2-f02a083553f6
 # ╠═4becbe30-d7a1-4949-a494-7f9bba8ed4c9
 # ╠═c1d04237-1696-4c08-9e78-7e7c0d659d0b
+# ╠═8bf36fd9-abf0-49fc-b4f3-0f10ba1ade1f
 # ╠═c7106eb9-b54d-4473-8ff4-2b8707260cec
 # ╠═557cc2d0-780a-4f6f-b5c9-6ae9bc31b014
 # ╠═33539ff5-9634-457d-991e-6af44184ce62
