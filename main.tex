@@ -32,6 +32,87 @@ Some abstract
 Some text from \cite{eth_bou}
 \section{Discretization}
 \subsection{Finite Volume Space Discretization}
+\subsection{Discretization of equation 1}
+Integrate over a control volume $\omega_k$:
+\begin{equation}
+   0=\int_{\omega_k}\frac{1}{\epsilon}f(u,v)d\omega +
+       \int_{\omega_k}\nabla \cdot (\sigma_i \nabla u)d\omega + \int_{\omega_k}\nabla \cdot (\sigma_i \nabla u_e)d\omega
+\end{equation}
+Apply Gauss' thereom to the two divergence terms:
+\begin{equation}
+    0=\int_{\omega_k}\frac{1}{\epsilon}f(u,v)d\omega +
+    \int_{d\omega_k}\sigma_i \nabla u \cdot \overrightarrow{n}ds +
+    \int_{d\omega_k}\sigma_i \nabla u_e \cdot \overrightarrow{n}ds
+\end{equation}
+Convert the surface integrals over the edge of the control volume into a sum of an integral over each side, as our Voronoi cell control volumes are polygons. Additionally, introduce a separate term for the surface integral over the specific case of sides that are boundary conditions.
+
+\begin{align*}
+    0 &=\int_{\omega_k}\frac{1}{\epsilon}f(u,v)d\omega \\ 
+    &+ \sum_{l \in N_k}\int_{s_{kl}} \sigma_i \nabla u \cdot \overrightarrow{n_{kl}}ds +
+    \sum_{m \in B_k}\int_{\gamma_{kl}} \sigma_i \nabla u \cdot \overrightarrow{n_{m}}ds \\
+    &+ \sum_{l \in N_k}\int_{s_{kl}} \sigma_i \nabla u_e \cdot \overrightarrow{n_{kl}}ds +
+    \sum_{m \in B_k}\int_{\gamma_{kl}} \sigma_i \nabla u_e \cdot \overrightarrow{n_{m}}ds
+\end{align*}
+Exploiting the admissibility condition, approximate the dot products using finite differences:
+\begin{equation}
+    \sigma_i \nabla u \cdot \overrightarrow{n} = \sigma_i \frac{u_k - u_l}{|x_k - x_l|}
+    \sigma_i \nabla u_e \cdot \overrightarrow{n} = \sigma_i \frac{u_{e_k} - u_{e_l}}{|x_k - x_l|}
+\end{equation}
+Substitute this approximation in and replace the integrals with a simple multiplication by the length of the cell border. Additionally expanding $f(u,v)$:
+\begin{align*}
+0 &= \int_{w_k}\frac{1}{\epsilon}(u - \frac{u^3}{3} - v)d\omega\\
+&+ \sum_{l \in N_k} |s_{kl}| \sigma_i ( \frac{u_k - u_l}{|x_k - x_l|} ) + 
+\sum_{m \in B_k} |\gamma_{km}| \sigma_i ( \frac{u_k - u_l}{|x_k - x_l|} )  \\
+&+ \sum_{l \in N_k} |s_{kl}| \sigma_i ( \frac{u_{e_k} - u_{e_l}}{|x_k - x_l|} ) + 
+\sum_{m \in B_k} |\gamma_{km}| \sigma_i ( \frac{u_{e_k} - u_{e_l}}{|x_k - x_l|} ) 
+\end{align*}
+
+Combine terms, and note the first integral simply becomes a multiplication by $|\omega_k|$:
+\begin{align*}
+0 &= \frac{|\omega_k|}{\epsilon}(u - \frac{u^3}{3} - v)\\
+&+ \sum_{l \in N_k} |s_{kl}| \sigma_i ( \frac{u_k - u_l + u_{e_k} - u_{e_l}}{|x_k - x_l|} ) \\
+&+ \sum_{m \in B_k} |\gamma_{km}| \sigma_i ( \frac{u_k - u_l + u_{e_k} - u_{e_l}}{|x_k - x_l|} ) 
+\end{align*}
+Move the boundary terms to the other side and organize so it is on the right:
+\begin{align*}
+\sum_{l \in N_k} |s_{kl}| \sigma_i ( \frac{u_k - u_l + u_{e_k} - u_{e_l}}{|x_k - x_l|} )
+&+ \frac{|\omega_k|}{\epsilon}(u - \frac{u^3}{3} - v)
+= -\sum_{m \in B_k} |\gamma_{km}| \sigma_i ( \frac{u_k - u_l + u_{e_k} - u_{e_l}}{|x_k - x_l|} ) 
+\end{align*}
+
+
+\subsection{Discretization of equation 2}
+Distrbute the divergence and integrate over a volume $\omega_k$:
+
+\begin{align*}
+0 = \int_{\omega_k} \nabla \cdot (\sigma_i \nabla u)d\omega + \int_{\omega_k}\nabla \cdot (\sigma_i + \sigma_e)\nabla u_e d\omega
+\end{align*}
+Apply Gauss' theorem:
+\begin{align*}
+0 = \int_{d\omega_k} (\sigma_i \nabla u)\cdot \overrightarrow{n}ds + \int_{d\omega_k}(\sigma_i + \sigma_e)\nabla u_e \cdot \overrightarrow{n} ds
+\end{align*}
+Again convert these terms to a sum of the integral over each side of the volume, and add terms for the boundary conditions:
+\begin{align*}
+    0 &= \sum_{l \in N_k}\int_{s_{kl}} \sigma_i \nabla u \cdot \overrightarrow{n_{kl}}ds +
+    \sum_{m \in B_k}\int_{\gamma_{kl}} \sigma_i \nabla u \cdot \overrightarrow{n_{m}}ds \\
+    &+ \sum_{l \in N_k}\int_{s_{kl}} (\sigma_i + \sigma_e) \nabla u_e \cdot \overrightarrow{n_{kl}}ds +
+    \sum_{m \in B_k}\int_{\gamma_{kl}} (\sigma_i + \sigma_e)\nabla u_e \cdot \overrightarrow{n_{m}}ds
+\end{align*}
+Again approximate the dot products as finite differences, and replace the integrals by the length of the cell border:
+\begin{align*}
+0 &= \sum_{l \in N_k} |s_{kl}| \sigma_i ( \frac{u_k - u_l}{|x_k - x_l|} ) + 
+\sum_{m \in B_k} |\gamma_{km}| \sigma_i ( \frac{u_k - u_l}{|x_k - x_l|} )  \\
+&+ \sum_{l \in N_k} |s_{kl}| (\sigma_i+\sigma_e) ( \frac{u_{e_k} - u_{e_l}}{|x_k - x_l|} ) + 
+\sum_{m \in B_k} |\gamma_{km}| (\sigma_i+\sigma_e) ( \frac{u_{e_k} - u_{e_l}}{|x_k - x_l|} ) 
+\end{align*}
+Combine terms and move the boundary conditions to the opposite side:
+\begin{align*}
+\sum_{l \in N_k} |s_{kl}| \sigma_i ( \frac{u_k - u_l}{|x_k - x_l|} ) 
++ \sum_{l \in N_k} |s_{kl}| (\sigma_i+\sigma_e) ( \frac{u_{e_k} - u_{e_l}}{|x_k - x_l|} ) = 
+-\sum_{m \in B_k} |\gamma_{km}| \sigma_i ( \frac{u_k - u_l}{|x_k - x_l|} )  
+-\sum_{m \in B_k} |\gamma_{km}| (\sigma_i+\sigma_e) ( \frac{u_{e_k} - u_{e_l}}{|x_k - x_l|} ) 
+\end{align*}
+
 \subsection{Time Discretization}
 
 \section{Solution of Discretized Problem}
