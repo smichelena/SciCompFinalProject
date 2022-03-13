@@ -1,24 +1,14 @@
 ### A Pluto.jl notebook ###
-# v0.17.7
+# v0.17.5
 
 using Markdown
 using InteractiveUtils
-
-# This Pluto notebook uses @bind for interactivity. When running this notebook outside of Pluto, the following 'mock version' of @bind gives bound variables a default value (instead of an error).
-macro bind(def, element)
-    quote
-        local iv = try Base.loaded_modules[Base.PkgId(Base.UUID("6e696c72-6542-2067-7265-42206c756150"), "AbstractPlutoDingetjes")].Bonds.initial_value catch; b -> missing; end
-        local el = $(esc(element))
-        global $(esc(def)) = Core.applicable(Base.get, el) ? Base.get(el) : iv(el)
-        el
-    end
-end
 
 # ╔═╡ bfef8ade-0b16-4a28-86d7-7e91876519c9
 begin
 	using ShortCodes, ExtendableGrids, VoronoiFVM, PlutoVista
 	using Plots, GridVisualize, PlutoUI, LaTeXStrings, PyPlot
-	using PyCall
+	using PyCall, CSV, DataFrames
 	GridVisualize.default_plotter!(Plots);
 	pyplot();
 	TableOfContents();
@@ -171,8 +161,10 @@ begin
 	β = 1.0
 	γ = 0.5
 	ε = 0.1
-	σᵢ = 1.0
-	σₑ = 1.0
+	σᵢ_normal = 1.0
+	σₑ_normal = 1.0
+	σᵢ_anisotropic = 25*[0.263 0; 0 0.0263]
+	σₑ_anisotropic = 25*[0.263 0; 0 0.1087]
 end;
 
 # ╔═╡ d3b4bdc4-f17f-4a83-9ddc-bfdd1ea7f26c
@@ -272,25 +264,66 @@ let
 end
 
 # ╔═╡ 6cb8de00-62a6-46b0-a367-21a282e4ff89
-physics = VoronoiFVM.Physics(
-	storage = function(y,u,node)
-		y[1] = u[1]
-		y[2] = 0
-		y[3] = u[3]
-	end,
-	flux = function(y,u,edge)
-		nspecies=3
-		y[1] = -σᵢ*(u[1,2]-u[1,1] + u[2,2] - u[2,1])
-		y[2] = σᵢ*(u[1,2]-u[1,1]) + (σᵢ+σₑ)*(u[2,2]-u[2,1])
-		y[3] = 0
-	end,
-	reaction = function(y,u,node)
-		node.index
-		y[1] = -f(u[1],u[3])/ε
-		y[2] = 0
-		y[3] = -ε*g(u[1],u[3])
-	end,
-)
+function create_physics(σᵢ, σₑ)
+	physics = VoronoiFVM.Physics(
+		storage = function(y,u,node)
+			y[1] = u[1]
+			y[2] = 0
+			y[3] = u[3]
+		end,
+		flux = function(y,u,edge)
+			y[1] = -σᵢ*(u[1,2]-u[1,1] + u[2,2]-u[2,1])
+			y[2] = σᵢ*(u[1,2]-u[1,1]) + (σᵢ+σₑ)*(u[2,2]-u[2,1])
+			y[3] = 0
+		end,
+		reaction = function(y,u,node)
+			y[1] = -f(u[1],u[3])/ε
+			y[2] = 0
+			y[3] = -ε*g(u[1],u[3])
+		end,
+	)
+end
+
+# ╔═╡ d5315aef-978d-447f-85dc-a3becdc33078
+function save_initial(init)
+	mkpath("../csv")
+	df = DataFrame(init, :auto)
+	CSV.write("../csv/initial_2D.csv", df)
+end
+
+# ╔═╡ f19b980c-7d6c-41c6-99af-8475f7aa72db
+function get_initial_data()
+	Array(DataFrame(CSV.File("../csv/initial_2D.csv")))
+end
+
+# ╔═╡ 8c168042-b17e-434f-b5da-423875d6cc37
+species = [L"u", L"u_e", L"v"]
+
+# ╔═╡ 7699e496-d0bd-4c39-9398-b90649694ea8
+dim = 1; N = 1000; Δt = 1e-1;
+
+# ╔═╡ 6ef697e9-a4b8-446e-bbb8-b577cea0161d
+function initial_cond(sys, xgrid, Tinit_solve, dim, initial2D, use_csv)
+	init = unknowns(sys)
+	U = unknowns(sys)
+	if dim==2 && initial2D
+		if use_csv
+			init = get_initial_data()
+		else
+			inival = map(u⃗₀_2D, xgrid)
+			init .= [tuple[k] for tuple in inival, k in 1:3]'
+			for t ∈ 0:Δt:Tinit_solve
+				solve!(U, init, sys; tstep=Δt)
+				init .= U
+			end
+			save_initial(init)
+		end
+	else
+		inival = map(u⃗₀, xgrid)
+		init .= [tuple[k] for tuple in inival, k in 1:3]'
+	end
+	init
+end
 
 # ╔═╡ 31017d7c-d875-442f-b77c-9abc828f42d6
 """
@@ -298,18 +331,13 @@ physics = VoronoiFVM.Physics(
 
 Solves the bidomain problem in `dim` dimensions with `N` grid points in each dimension. Uses Δt as time step until final time tₑ.
 """
-function bidomain(;N=100, dim=1, Δt=1e-3, T=T, Plotter=Plots, dim2_special=false)
+function bidomain(;N=100, dim=1, Δt=1e-3, T=30, Plotter=Plots, 
+		initial2D=false, Tinit_solve=40, use_csv=false, anisotropic=false)
 	xgrid = create_grid(N, dim)
 
-	function bc(y,u,node)
-		boundary_dirichlet!(y,u,node; region=1, value=0, species=1)
-		for i=1:2
-			for j=1:2
-				boundary_neumann!(y,u,node; region=i, value=0, species=j)
-			end
-		end
-	end
-
+	σᵢ, σₑ = anisotropic ? (σᵢ_anisotropic, σₑ_anisotropic) : (σᵢ_normal, σₑ_normal)
+	physics = create_physics(σᵢ,σₑ)
+	
 	sys = VoronoiFVM.System(
 		xgrid,
 		physics,
@@ -318,31 +346,22 @@ function bidomain(;N=100, dim=1, Δt=1e-3, T=T, Plotter=Plots, dim2_special=fals
 
 	boundaries = (dim == 1 ? 2 : 4)
 	enable_species!(sys, species=[1,2,3])
-	boundary_dirichlet!(sys,2,1,0)
+	if dim==1
+		boundary_dirichlet!(sys,2,1,0)
+	else
+	end
 	for ispec ∈ [1 3]
 		for ibc=1:boundaries
 			boundary_neumann!(sys,ispec,ibc,0)
 		end
 	end
 
-	init = unknowns(sys)
-	U = unknowns(sys)
-	if dim==2 && dim2_special
-		inival = map(u⃗₀_2D, xgrid)
-		init .= [tuple[k] for tuple in inival, k in 1:3]'
-		for t ∈ 0:Δt:T
-			solve!(U, init, sys; tstep=Δt)
-			init .= U
-		end
-	else
-		inival = map(u⃗₀, xgrid)
-		init .= [tuple[k] for tuple in inival, k in 1:3]'
-	end
 
+	init = initial_cond(sys, xgrid, Tinit_solve, dim, initial2D, use_csv)
 	U = unknowns(sys)
 
 	SolArray = copy(init)
-	tgrid = dim2_special ? (T:Δt:2T) : (0:Δt:T)
+	tgrid = initial2D ? (Tinit_solve:Δt:T+Tinit_solve) : (0:Δt:T)
 	for t ∈ tgrid[2:end]
 		solve!(U, init, sys; tstep=Δt)
 		init .= U
@@ -352,20 +371,11 @@ function bidomain(;N=100, dim=1, Δt=1e-3, T=T, Plotter=Plots, dim2_special=fals
 	return xgrid, tgrid, SolArray, vis, sys
 end
 
-# ╔═╡ 8c168042-b17e-434f-b5da-423875d6cc37
-species = [L"u", L"u_e", L"v"]
-
-# ╔═╡ 7699e496-d0bd-4c39-9398-b90649694ea8
-dim = 1; N = 1000; Δt = 1e-1;
-
 # ╔═╡ 78e23bc8-da0f-4ba8-85ca-4d6f4b6d5538
-gridx, gridt, sol1, vis1 = bidomain(T=1,Δt=1e-1);
+gridx, gridt, sol1, vis1 = bidomain(N=(3,3),dim=2,T=1,Δt=10e-1);
 
 # ╔═╡ 88540b7a-90da-45a6-9025-fccafa4a19ff
-xgrid, tgrid, sol, vis = bidomain(dim=dim, N=N, Δt=Δt);
-
-# ╔═╡ 4772c2e1-9399-4a88-9c31-cd334d2c834b
-t = @bind t Slider(tgrid, default=0, show_value=true)
+xgrid, tgrid, sol, vis = bidomain(dim=dim, N=N, T=T, Δt=Δt);
 
 # ╔═╡ 45c86875-d68a-40d3-b340-d2b4af94e849
 function plot_at_t(t,vis,xgrid,sol)
@@ -387,9 +397,10 @@ plot_at_t(11,vis,xgrid,sol)
 
 # ╔═╡ 6fcf5e8c-c44e-4684-b512-cef6031ad66b
 begin
-	@gif for t in 0:Δt*5:T
+	anim = @animate for t in 0:Δt*5:T
 		plot_at_t(t,vis,xgrid,sol)
 	end
+	gif(anim, "../movies/1D_solution.gif", fps=15)
 end
 
 # ╔═╡ 882e929d-0188-4907-92ef-d9066b92148c
@@ -433,6 +444,7 @@ function contour_plot(spec)
 	PyPlot.ylabel(L"t")
 	figure=PyPlot.gcf()
 	figure.set_size_inches(7,7)
+	PyPlot.savefig("../img/st_contour_plot_species_"*string(spec))
 	figure
 end
 
@@ -448,12 +460,12 @@ contour_plot(3)
 # ╔═╡ a24ebb01-038c-4107-b730-887a86a14fe7
 begin
 	dim₂=2; N₂ = (100,25); Δt₂ = 1e-1;
-	xgrid₂, tgrid₂, sol₂, vis₂ = bidomain(dim=dim₂, N=N₂, Δt=Δt₂, Plotter=PyPlot);
+	xgrid₂, tgrid₂, sol₂, vis₂ = bidomain(dim=dim₂, N=N₂,T=T, Δt=Δt₂, Plotter=PyPlot);
 end;
 
 # ╔═╡ 0edfe024-2786-4570-96f2-f02a083553f6
-function contour_2d_at_t(spec, t, xgrid, sol)
-	tₛ = Int16(round(t/Δt₂))+1
+function contour_2d_at_t(spec, t, Δt, xgrid, sol)
+	tₛ = Int16(round(t/Δt))+1
 	p = scalarplot(
 		xgrid,sol[spec,:,tₛ], Plotter=PyPlot, colormap=:hot, 
 		title="2D problem with 1D problem setup for "*species[spec]*
@@ -466,24 +478,33 @@ function contour_2d_at_t(spec, t, xgrid, sol)
 end
 
 # ╔═╡ 4becbe30-d7a1-4949-a494-7f9bba8ed4c9
-contour_2d_at_t(2,3,xgrid₂,sol₂)
+contour_2d_at_t(2,3,Δt₂,xgrid₂,sol₂)
 
 # ╔═╡ c1d04237-1696-4c08-9e78-7e7c0d659d0b
 begin
 	dim₃=2; N₃ = (100,25); Δt₃ = 1e-1;
 	xgrid₃, tgrid₃, sol₃, vis₃ = bidomain(
-		dim=dim₃, N=N₃, Δt=Δt₃, Plotter=PyPlot, dim2_special=true);
+		dim=dim₃, N=N₃, T=T, Δt=Δt₃, Plotter=PyPlot, initial2D=true, use_csv=true);
+end;
+
+# ╔═╡ 8bf36fd9-abf0-49fc-b4f3-0f10ba1ade1f
+begin
+	dim₄=2; N₄=(100,25); Δt₄=1e-1;
+	xgrid₄, tgrid₄, sol₄, vis₄ = bidomain(
+		dim=dim₄, N=N₄, T=T, Δt=Δt₄, Plotter=PyPlot, initial2D=true,
+		anisotropic=true);
 end;
 
 # ╔═╡ c7106eb9-b54d-4473-8ff4-2b8707260cec
-contour_2d_at_t(3,0,xgrid₃,sol₃)
+contour_2d_at_t(2,21,Δt₃,xgrid₃,sol₃)
 
 # ╔═╡ 557cc2d0-780a-4f6f-b5c9-6ae9bc31b014
 function images_for_gif(spec, folder, xgrid, sol; steps=5)
-	folder = "images/"*folder*"_"*string(spec)*"/"
+	folder = "../img/"*folder*"_"*string(spec)*"/"
+	mkpath(folder)
 
 	grid_vis = GridVisualizer(resolution=(500,500), dim=2, Plotter=PyPlot)
-	for ts=1:steps:size(sol)[3]
+	for ts=2:steps:size(sol)[3]
 		scalarplot!(grid_vis,
 			xgrid,sol[spec,:,ts], Plotter=PyPlot, colormap=:hot, colorlevels=100,
 			colorbar=false)
@@ -514,6 +535,8 @@ end
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
+CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 ExtendableGrids = "cfc395e8-590f-11e8-1f13-43a2532b2fa8"
 GridVisualize = "5eed8a63-0fb0-45eb-886d-8d5a387d12b8"
 LaTeXStrings = "b964fa9f-0449-5b57-a5c2-d3ea65f4040f"
@@ -526,6 +549,8 @@ ShortCodes = "f62ebe17-55c5-4640-972f-b59c0dd11ccf"
 VoronoiFVM = "82b139dc-5afc-11e9-35da-9b9bdfd336f3"
 
 [compat]
+CSV = "~0.10.3"
+DataFrames = "~1.3.2"
 ExtendableGrids = "~0.9.1"
 GridVisualize = "~0.5.1"
 LaTeXStrings = "~1.3.0"
@@ -611,6 +636,12 @@ deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "19a35467a82e236ff51bc17a3a44b69ef35185a2"
 uuid = "6e34b625-4abd-537c-b88f-471c36dfa7a0"
 version = "1.0.8+0"
+
+[[CSV]]
+deps = ["CodecZlib", "Dates", "FilePathsBase", "InlineStrings", "Mmap", "Parsers", "PooledArrays", "SentinelArrays", "Tables", "Unicode", "WeakRefStrings"]
+git-tree-sha1 = "9310d9495c1eb2e4fa1955dd478660e2ecab1fbb"
+uuid = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
+version = "0.10.3"
 
 [[Cairo_jll]]
 deps = ["Artifacts", "Bzip2_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll", "JLLWrappers", "LZO_jll", "Libdl", "Pixman_jll", "Pkg", "Xorg_libXext_jll", "Xorg_libXrender_jll", "Zlib_jll", "libpng_jll"]
@@ -714,10 +745,21 @@ git-tree-sha1 = "9f02045d934dc030edad45944ea80dbd1f0ebea7"
 uuid = "d38c429a-6771-53c6-b99e-75d170b6e991"
 version = "0.5.7"
 
+[[Crayons]]
+git-tree-sha1 = "249fe38abf76d48563e2f4556bebd215aa317e15"
+uuid = "a8cc5b0e-0ffa-5ad4-8c14-923d3ee1735f"
+version = "4.1.1"
+
 [[DataAPI]]
 git-tree-sha1 = "cc70b17275652eb47bc9e5f81635981f13cea5c8"
 uuid = "9a962f9c-6df0-11e9-0e5d-c546b8b5ee8a"
 version = "1.9.0"
+
+[[DataFrames]]
+deps = ["Compat", "DataAPI", "Future", "InvertedIndices", "IteratorInterfaceExtensions", "LinearAlgebra", "Markdown", "Missings", "PooledArrays", "PrettyTables", "Printf", "REPL", "Reexport", "SortingAlgorithms", "Statistics", "TableTraits", "Tables", "Unicode"]
+git-tree-sha1 = "ae02104e835f219b8930c7664b8012c93475c340"
+uuid = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+version = "1.3.2"
 
 [[DataStructures]]
 deps = ["Compat", "InteractiveUtils", "OrderedCollections"]
@@ -858,11 +900,17 @@ git-tree-sha1 = "80ced645013a5dbdc52cf70329399c35ce007fae"
 uuid = "5789e2e9-d7fb-5bc7-8068-2c6fae9b9549"
 version = "1.13.0"
 
+[[FilePathsBase]]
+deps = ["Compat", "Dates", "Mmap", "Printf", "Test", "UUIDs"]
+git-tree-sha1 = "04d13bfa8ef11720c24e4d840c0033d145537df7"
+uuid = "48062228-2e41-5def-b9a4-89aafe57970f"
+version = "0.9.17"
+
 [[FillArrays]]
 deps = ["LinearAlgebra", "Random", "SparseArrays", "Statistics"]
-git-tree-sha1 = "4c7d3757f3ecbcb9055870351078552b7d1dbd2d"
+git-tree-sha1 = "0dbc5b9683245f905993b51d2814202d75b34f1a"
 uuid = "1a297f60-69ca-5386-bcde-b61e274b549b"
-version = "0.13.0"
+version = "0.13.1"
 
 [[FiniteDiff]]
 deps = ["ArrayInterface", "LinearAlgebra", "Requires", "SparseArrays", "StaticArrays"]
@@ -1024,6 +1072,12 @@ git-tree-sha1 = "4da0f88e9a39111c2fa3add390ab15f3a44f3ca3"
 uuid = "22cec73e-a1b8-11e9-2c92-598750a2cf9c"
 version = "0.3.1"
 
+[[InlineStrings]]
+deps = ["Parsers"]
+git-tree-sha1 = "61feba885fac3a407465726d0c330b3055df897f"
+uuid = "842dd82b-1e85-43dc-bf29-5d0ee9dffc48"
+version = "1.1.2"
+
 [[InteractiveUtils]]
 deps = ["Markdown"]
 uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
@@ -1036,9 +1090,14 @@ version = "0.5.3"
 
 [[InverseFunctions]]
 deps = ["Test"]
-git-tree-sha1 = "a7254c0acd8e62f1ac75ad24d5db43f5f19f3c65"
+git-tree-sha1 = "91b5dcf362c5add98049e6c29ee756910b03051d"
 uuid = "3587e190-3f89-42d0-90ee-14403ec27112"
-version = "0.1.2"
+version = "0.1.3"
+
+[[InvertedIndices]]
+git-tree-sha1 = "bee5f1ef5bf65df56bdd2e40447590b272a5471f"
+uuid = "41ab1584-1d38-5bbf-9106-f11c6c58b48f"
+version = "1.1.0"
 
 [[IrrationalConstants]]
 git-tree-sha1 = "7fd44fd4ff43fc60815f8e764c0f352b83c49151"
@@ -1194,7 +1253,7 @@ uuid = "38a345b3-de98-5d2b-a5d3-14cd9215e700"
 version = "2.36.0+0"
 
 [[LinearAlgebra]]
-deps = ["Libdl", "libblastrampoline_jll"]
+deps = ["Libdl"]
 uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 
 [[LogExpFunctions]]
@@ -1291,10 +1350,6 @@ deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "887579a3eb005446d514ab7aeac5d1d027658b8f"
 uuid = "e7412a2a-1a6e-54c0-be00-318e2571c051"
 version = "1.3.5+1"
-
-[[OpenBLAS_jll]]
-deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
-uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
 
 [[OpenLibm_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -1393,11 +1448,23 @@ git-tree-sha1 = "2435d1d3e02db324414f268f30999b5c06a0d10f"
 uuid = "646e1f28-b900-46d7-9d87-d554eb38a413"
 version = "0.8.12"
 
+[[PooledArrays]]
+deps = ["DataAPI", "Future"]
+git-tree-sha1 = "db3a23166af8aebf4db5ef87ac5b00d36eb771e2"
+uuid = "2dfb63ee-cc39-5dd5-95bd-886bf059d720"
+version = "1.4.0"
+
 [[Preferences]]
 deps = ["TOML"]
 git-tree-sha1 = "de893592a221142f3db370f48290e3a2ef39998f"
 uuid = "21216c6a-2e73-6563-6e65-726566657250"
 version = "1.2.4"
+
+[[PrettyTables]]
+deps = ["Crayons", "Formatting", "Markdown", "Reexport", "Tables"]
+git-tree-sha1 = "dfb54c4e414caa595a1f2ed759b160f5a3ddcba5"
+uuid = "08abe8d2-0d0c-5749-adfa-8a2ac140af0d"
+version = "1.3.1"
 
 [[Printf]]
 deps = ["Unicode"]
@@ -1432,7 +1499,7 @@ deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]
 uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 
 [[Random]]
-deps = ["SHA", "Serialization"]
+deps = ["Serialization"]
 uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 
 [[RecipesBase]]
@@ -1507,6 +1574,12 @@ deps = ["Dates"]
 git-tree-sha1 = "0b4b7f1393cff97c33891da2a0bf69c6ed241fda"
 uuid = "6c6a2e73-6563-6170-7368-637461726353"
 version = "1.1.0"
+
+[[SentinelArrays]]
+deps = ["Dates", "Random"]
+git-tree-sha1 = "6a2f7d70512d205ca8c7ee31bfa9f142fe74310c"
+uuid = "91c51154-3ec4-41a3-a24f-3f23e20d615c"
+version = "1.3.12"
 
 [[Serialization]]
 uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
@@ -1748,6 +1821,12 @@ git-tree-sha1 = "4528479aa01ee1b3b4cd0e6faef0e04cf16466da"
 uuid = "2381bf8a-dfd0-557d-9999-79630e7b1b91"
 version = "1.25.0+0"
 
+[[WeakRefStrings]]
+deps = ["DataAPI", "InlineStrings", "Parsers"]
+git-tree-sha1 = "b1be2855ed9ed8eac54e5caff2afcdb442d52c23"
+uuid = "ea10d353-3f73-51f8-a26c-33c1cb351aa5"
+version = "1.4.2"
+
 [[XML2_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Libiconv_jll", "Pkg", "Zlib_jll"]
 git-tree-sha1 = "1acf5bdf07aa0907e0a37d3718bb88d4b687b74a"
@@ -1908,10 +1987,6 @@ git-tree-sha1 = "5982a94fcba20f02f42ace44b9894ee2b140fe47"
 uuid = "0ac62f75-1d6f-5e53-bd7c-93b484bb37c0"
 version = "0.15.1+0"
 
-[[libblastrampoline_jll]]
-deps = ["Artifacts", "Libdl", "OpenBLAS_jll"]
-uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
-
 [[libfdk_aac_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "daacc84a041563f965be61859a36e17c4e4fcd55"
@@ -1959,7 +2034,7 @@ version = "0.9.1+5"
 
 # ╔═╡ Cell order:
 # ╠═bfef8ade-0b16-4a28-86d7-7e91876519c9
-# ╠═6c8a63a7-2f5f-4e10-aca5-06d58d0eacd1
+# ╟─6c8a63a7-2f5f-4e10-aca5-06d58d0eacd1
 # ╟─9653fb91-a348-4c4e-9892-020211969393
 # ╟─41ad9bd9-6cea-4b44-a3af-297b21db9f67
 # ╟─5c0fa52c-aad8-46c3-a660-4ac85b3904ea
@@ -1978,11 +2053,13 @@ version = "0.9.1+5"
 # ╠═dea5cc0a-a112-494a-85ba-0fcf15d6c2e6
 # ╠═6cb8de00-62a6-46b0-a367-21a282e4ff89
 # ╠═31017d7c-d875-442f-b77c-9abc828f42d6
+# ╠═6ef697e9-a4b8-446e-bbb8-b577cea0161d
+# ╠═d5315aef-978d-447f-85dc-a3becdc33078
+# ╠═f19b980c-7d6c-41c6-99af-8475f7aa72db
 # ╠═8c168042-b17e-434f-b5da-423875d6cc37
 # ╠═7699e496-d0bd-4c39-9398-b90649694ea8
 # ╠═78e23bc8-da0f-4ba8-85ca-4d6f4b6d5538
 # ╠═88540b7a-90da-45a6-9025-fccafa4a19ff
-# ╠═4772c2e1-9399-4a88-9c31-cd334d2c834b
 # ╠═45c86875-d68a-40d3-b340-d2b4af94e849
 # ╠═d477647c-de1f-4dbf-b982-c1577adcf398
 # ╠═6fcf5e8c-c44e-4684-b512-cef6031ad66b
@@ -1995,6 +2072,7 @@ version = "0.9.1+5"
 # ╠═0edfe024-2786-4570-96f2-f02a083553f6
 # ╠═4becbe30-d7a1-4949-a494-7f9bba8ed4c9
 # ╠═c1d04237-1696-4c08-9e78-7e7c0d659d0b
+# ╠═8bf36fd9-abf0-49fc-b4f3-0f10ba1ade1f
 # ╠═c7106eb9-b54d-4473-8ff4-2b8707260cec
 # ╠═557cc2d0-780a-4f6f-b5c9-6ae9bc31b014
 # ╠═33539ff5-9634-457d-991e-6af44184ce62
