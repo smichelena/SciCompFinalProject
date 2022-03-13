@@ -263,8 +263,19 @@ let
 	Plots.plot!(p,X,v₀,label=L"v_0",lw=lw, color="Green")
 end
 
+# ╔═╡ 1fc8a5f0-fa99-44c6-a19a-3334e20eec15
+function get_σₛ(σᵢ,σₑ,edge)
+	n1 = edge.coord[:,edge.node[1]]
+	n2 = edge.coord[:,edge.node[2]]
+	x = abs(n1[1] - n2[1]); y = abs(n1[2] - n2[2])
+	θ = atan(y/x)
+	l = [1 1]; r = [cos(θ);sin(θ)]
+	σᵢ_θ = (l*σᵢ*r)[1]; σₑ_θ = (l*σₑ*r)[1]
+	σᵢ_θ, σₑ_θ
+end
+
 # ╔═╡ 6cb8de00-62a6-46b0-a367-21a282e4ff89
-function create_physics(σᵢ, σₑ)
+function create_physics(σᵢ_orig, σₑ_orig; anisotropic=false)
 	physics = VoronoiFVM.Physics(
 		storage = function(y,u,node)
 			y[1] = u[1]
@@ -272,6 +283,7 @@ function create_physics(σᵢ, σₑ)
 			y[3] = u[3]
 		end,
 		flux = function(y,u,edge)
+			σᵢ, σₑ = anisotropic ? get_σₛ(σᵢ_orig,σₑ_orig,edge) : (σᵢ_orig,σₑ_orig)
 			y[1] = -σᵢ*(u[1,2]-u[1,1] + u[2,2]-u[2,1])
 			y[2] = σᵢ*(u[1,2]-u[1,1]) + (σᵢ+σₑ)*(u[2,2]-u[2,1])
 			y[3] = 0
@@ -336,7 +348,7 @@ function bidomain(;N=100, dim=1, Δt=1e-3, T=30, Plotter=Plots,
 	xgrid = create_grid(N, dim)
 
 	σᵢ, σₑ = anisotropic ? (σᵢ_anisotropic, σₑ_anisotropic) : (σᵢ_normal, σₑ_normal)
-	physics = create_physics(σᵢ,σₑ)
+	physics = create_physics(σᵢ,σₑ; anisotropic=anisotropic)
 	
 	sys = VoronoiFVM.System(
 		xgrid,
@@ -363,6 +375,7 @@ function bidomain(;N=100, dim=1, Δt=1e-3, T=30, Plotter=Plots,
 	SolArray = copy(init)
 	tgrid = initial2D ? (Tinit_solve:Δt:T+Tinit_solve) : (0:Δt:T)
 	for t ∈ tgrid[2:end]
+		println("t:",t)
 		solve!(U, init, sys; tstep=Δt)
 		init .= U
 		SolArray = cat(SolArray, copy(U), dims=3)
@@ -372,7 +385,7 @@ function bidomain(;N=100, dim=1, Δt=1e-3, T=30, Plotter=Plots,
 end
 
 # ╔═╡ 78e23bc8-da0f-4ba8-85ca-4d6f4b6d5538
-gridx, gridt, sol1, vis1 = bidomain(N=(3,3),dim=2,T=1,Δt=10e-1);
+#gridx, gridt, sol1, vis1 = bidomain(N=(3,3),dim=2,T=1,Δt=10e-1);
 
 # ╔═╡ 88540b7a-90da-45a6-9025-fccafa4a19ff
 xgrid, tgrid, sol, vis = bidomain(dim=dim, N=N, T=T, Δt=Δt);
@@ -427,7 +440,7 @@ function plot_species_3d(spec)
 end
 
 # ╔═╡ 61377a01-378d-4ea5-bcfd-b827acfba523
-function contour_plot(spec)
+function contour_plot(spec; initial2D=false, anisotropic=false)
 	PyPlot.clf()
 	Xgrid = xgrid[Coordinates][:]
 	Tgrid = tgrid
@@ -444,7 +457,8 @@ function contour_plot(spec)
 	PyPlot.ylabel(L"t")
 	figure=PyPlot.gcf()
 	figure.set_size_inches(7,7)
-	PyPlot.savefig("../img/st_contour_plot_species_"*string(spec))
+	extra = initial2D ? ("_inital2D") : (anisotropic ? "_anisotropic" : "") 
+	PyPlot.savefig("../img/st_contour_plot_spec_"*string(spec)*extra)
 	figure
 end
 
@@ -487,7 +501,10 @@ begin
 		dim=dim₃, N=N₃, T=T, Δt=Δt₃, Plotter=PyPlot, initial2D=true, use_csv=true);
 end;
 
-# ╔═╡ 8bf36fd9-abf0-49fc-b4f3-0f10ba1ade1f
+# ╔═╡ c7106eb9-b54d-4473-8ff4-2b8707260cec
+contour_2d_at_t(2,21,Δt₃,xgrid₃,sol₃)
+
+# ╔═╡ 36854b9a-39f3-4fca-94da-f9f97cee1663
 begin
 	dim₄=2; N₄=(100,25); Δt₄=1e-1;
 	xgrid₄, tgrid₄, sol₄, vis₄ = bidomain(
@@ -495,8 +512,8 @@ begin
 		anisotropic=true);
 end;
 
-# ╔═╡ c7106eb9-b54d-4473-8ff4-2b8707260cec
-contour_2d_at_t(2,21,Δt₃,xgrid₃,sol₃)
+# ╔═╡ 65931b4e-2698-4ddc-990f-3d205bf0c686
+contour_2d_at_t(2,21,Δt₄,xgrid₄,sol₄)
 
 # ╔═╡ 557cc2d0-780a-4f6f-b5c9-6ae9bc31b014
 function images_for_gif(spec, folder, xgrid, sol; steps=5)
@@ -2052,6 +2069,7 @@ version = "0.9.1+5"
 # ╠═47c78a62-d0a1-4120-9303-35a9d7d20ee9
 # ╠═dea5cc0a-a112-494a-85ba-0fcf15d6c2e6
 # ╠═6cb8de00-62a6-46b0-a367-21a282e4ff89
+# ╠═1fc8a5f0-fa99-44c6-a19a-3334e20eec15
 # ╠═31017d7c-d875-442f-b77c-9abc828f42d6
 # ╠═6ef697e9-a4b8-446e-bbb8-b577cea0161d
 # ╠═d5315aef-978d-447f-85dc-a3becdc33078
@@ -2072,8 +2090,9 @@ version = "0.9.1+5"
 # ╠═0edfe024-2786-4570-96f2-f02a083553f6
 # ╠═4becbe30-d7a1-4949-a494-7f9bba8ed4c9
 # ╠═c1d04237-1696-4c08-9e78-7e7c0d659d0b
-# ╠═8bf36fd9-abf0-49fc-b4f3-0f10ba1ade1f
 # ╠═c7106eb9-b54d-4473-8ff4-2b8707260cec
+# ╠═36854b9a-39f3-4fca-94da-f9f97cee1663
+# ╠═65931b4e-2698-4ddc-990f-3d205bf0c686
 # ╠═557cc2d0-780a-4f6f-b5c9-6ae9bc31b014
 # ╠═33539ff5-9634-457d-991e-6af44184ce62
 # ╠═6b1e8f04-ae8b-4758-86d9-b947e1620c0d
