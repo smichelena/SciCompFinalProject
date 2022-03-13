@@ -14,16 +14,6 @@ using PyCall
 GridVisualize.default_plotter!(Plots);
 pyplot();
 
-begin
-	β = 1.0
-	γ = 0.5
-	ε = 0.1
-	σᵢ = 1.0
-	σₑ = 1.0
-    L = 70
-	T = 30
-end;
-
 """
     f(u,v)
 
@@ -36,14 +26,14 @@ f(u,v) = u - u^3/3 - v
 
 Returns g(u,v) as in equation (1.5) of Ethier and Bourgalt.
 """
-g(u,v) = u + β - γ*v
+g(u,v ;γ=0.5, β=1.0) = u + β - γ*v
 
 """
 	fg_zeros()
 
 Returns the approximate solution to f=g=0.
 """
-function fg_zeros(β,γ)
+function fg_zeros(;γ=0.5, β=1.0)
 	p = 3(1-γ)/γ; q = 3β/γ;
 	h(u) = u^3 + p*u + q; ḣ(u) = 3u^2 + p
 	uₙ = 1; hₙ = 1
@@ -79,7 +69,7 @@ end
 Returns vector valued function representing 1D initial conditions for u, uₑ an v
 """
 function u⃗₀(x, L)
-    u, v = fg_zeros(β, γ)
+    u, v = fg_zeros()
     if 0 ≤ x ≤ L/20
         u = 2
     end
@@ -92,7 +82,7 @@ end
 
 Returns vector valued function representing 2D initial conditions for u, uₑ and v using 1D data
 """
-function u⃗₀(x,y, L)
+function u⃗₀(x, y, L)
     return u⃗₀(x, L)
 end
 
@@ -102,7 +92,7 @@ end
 Returns vector valued function representing 2D initial conditions for u, uₑ and v 
 """
 function u⃗₀_2D(x,y)
-    u, v = fg_zeros(β, γ)
+    u, v = fg_zeros()
     if 0 ≤ x ≤ 3.5 && 0 ≤ y ≤ 70
         u = 2
     end
@@ -133,44 +123,35 @@ function plot_initial_conditions_1D(L)
 	Plots.plot!(p,X,u₀,label=L"u_0",lw=lw, color="Blue")
 	Plots.plot!(p,X,uₑ₀,label=L"u_{e,0}",lw=lw, color="Red")
 	Plots.plot!(p,X,v₀,label=L"v_0",lw=lw, color="Green")
+	return p
 end
 
 """
-    Define physics for 1D problem
-"""
-physics = VoronoiFVM.Physics(
-	storage = function(y,u,node)
-		y[1] = u[1]
-		y[2] = 0
-		y[3] = u[3]
-	end,
-	flux = function(y,u,edge)
-		nspecies=3
-		y[1] = -σᵢ*(u[1,2]-u[1,1] + u[2,2] - u[2,1])
-		y[2] = σᵢ*(u[1,2]-u[1,1]) + (σᵢ+σₑ)*(u[2,2]-u[2,1])
-		y[3] = 0
-	end,
-	reaction = function(y,u,node)
-		node.index
-		y[1] = -f(u[1],u[3])/ε
-		y[2] = 0
-		y[3] = -ε*g(u[1],u[3])
-	end,
-)
+	create_physics(σᵢ, σₑ)
 
+Given conductivity tensors σᵢ, σₑ and parameter ε defines physics for problem
 """
-    bc(y, u, node)
-
-imposes boundary conditions (?)
-"""
-function bc(y,u,node)
-    boundary_dirichlet!(y,u,node; region=1, value=0, species=1)
-    for i=1:2
-        for j=1:2
-            boundary_neumann!(y,u,node; region=i, value=0, species=j)
-        end
-    end
+function create_physics(σᵢ, σₑ; ε=0.1)
+	physics = VoronoiFVM.Physics(
+		storage = function(y,u,node)
+			y[1] = u[1]
+			y[2] = 0
+			y[3] = u[3]
+		end,
+		flux = function(y,u,edge)
+			y[1] = -σᵢ*(u[1,2]-u[1,1] + u[2,2]-u[2,1])
+			y[2] = σᵢ*(u[1,2]-u[1,1]) + (σᵢ+σₑ)*(u[2,2]-u[2,1])
+			y[3] = 0
+		end,
+		reaction = function(y,u,node)
+			y[1] = -f(u[1],u[3])/ε
+			y[2] = 0
+			y[3] = -ε*g(u[1],u[3])
+		end,
+	)
+	return physics
 end
+
 
 """
     impose_neumann_boundary(sys, dim)
@@ -212,14 +193,33 @@ function solve_in_time(U, sys, init, inival, t₀, Δt, T; storing=storing)
 end
 
 """
-	bidomain(;N=100, dim=1, Δt=1e-4, tₑ=T)
+	function bidomain(;N=100, L=70, dim=1, Δt=1e-3, T=T, σᵢ=1.0, σₑ=1.0, Plotter=Plots, dim2_special=false)
 
-Solves the bidomain problem in `dim` dimensions with `N` grid points in each dimension. 
-Uses Δt as time step until final time tₑ.
+Solves bidomain problem.
+
+`N`: number of grid points
+
+`L`: length of domain
+
+`dim`: number of dimensions
+
+`Δt`: time step size for theta scheme
+
+`T`: time to solve for
+
+`σᵢ`: conductivity tensor
+
+`σₑ`: conductivity tensor
+
+`Plotter`: which plotter to use
+
+`dim2_special`: set to true if using 1D data on 2D problem
 """
-function bidomain(;N=100, L=70, dim=1, Δt=1e-3, T=T, Plotter=Plots, dim2_special=false)
+function bidomain(;N=100, L=70, dim=1, Δt=1e-3, T=T, σᵢ=1.0, σₑ=1.0, Plotter=Plots, dim2_special=false)
+
 	xgrid = create_grid(N, L, dim)
 
+	physics = create_physics(σᵢ, σₑ)
 
 	sys = VoronoiFVM.System(
 		xgrid,
@@ -229,7 +229,6 @@ function bidomain(;N=100, L=70, dim=1, Δt=1e-3, T=T, Plotter=Plots, dim2_specia
 
     impose_neumann_boundary(sys, dim)
 
-    #this can be factored out
 	init = unknowns(sys)
 	U = unknowns(sys)
 	if dim==2 && dim2_special
@@ -266,15 +265,101 @@ function plot_at_t(t, Δt, vis, xgrid, sol, species)
 	end
 	Plots.plot!(labels=species)
 	Plots.plot!(ylims=(-2.5,2.5))
-	plotted_sol
+	return plotted_sol
+end
+
+"""
+	plot_species_3d(spec, sol, label)
+
+Plots solucion to 1D bidomain problem as a 3D plot
+"""
+function plot_species_3d(spec, sol, label, xgrid, tgrid)
+	Xgrid = xgrid[Coordinates][:]; Tgrid = tgrid; Zgrid = sol[spec,:,:];
+	xstep = 1; tstep = 1;
+	Tgrid = Tgrid[1:xstep:end]; 
+	Xgrid = Xgrid[1:tstep:end]
+	Zgrid = Zgrid[1:tstep:end,1:xstep:end]; 
+	PyPlot.clf()
+	PyPlot.suptitle("Space-Time plot for "*label[spec])
+	PyPlot.surf(Xgrid,Tgrid,Zgrid',cmap=:coolwarm) # 3D surface plot
+	ax=PyPlot.gca(projection="3d")  # Obtain 3D plot axes
+	α = 30; β = 240
+	ax.view_init(α,β) # Adjust viewing angles
+	
+	PyPlot.xlabel(L"X")
+	PyPlot.ylabel(L"T")
+	PyPlot.zlabel(L"u")
+	figure=PyPlot.gcf()
+	figure.set_size_inches(7,7)
+	return figure
+end
+
+"""
+	contour_plot(spec, sol, label)
+
+Makes a contour plot of species spec
+"""
+function contour_plot(spec, sol, label, xgrid, tgrid)
+	PyPlot.clf()
+	Xgrid = xgrid[Coordinates][:]
+	Tgrid = tgrid
+	Zgrid = sol[spec,:,:]
+	PyPlot.suptitle("Space-time contour plot of "*label[spec])
+	
+	PyPlot.contourf(Xgrid,Tgrid,Zgrid',cmap="hot",levels=100)
+	axes=PyPlot.gca()
+	axes.set_aspect(2)
+	PyPlot.colorbar()
+
+	PyPlot.size(600,600)
+	PyPlot.xlabel(L"x")
+	PyPlot.ylabel(L"t")
+	figure=PyPlot.gcf()
+	figure.set_size_inches(7,7)
+	figure
+end
+
+"""
+	contour_2d_at_t(spec, t, xgrid, sol, label)
+
+plots contour of 2D priblem at time t
+"""
+function contour_2d_at_t(spec, t, xgrid, sol, label)
+	tₛ = Int16(round(t/Δt₂))+1
+	p = scalarplot(
+		xgrid,sol[spec,:,tₛ], Plotter=PyPlot, colormap=:hot, 
+		title="2D problem with 1D problem setup for "*label[spec]*
+		" at t="*string(t),
+		colorlevels=100, isolines=0)
+	p.set_size_inches(7,7)
+	PyPlot.xlabel(L"x")
+	PyPlot.ylabel(L"y")
+	p
 end
 
 function main()
-    plot_initial_conditions_1D(70)
+	# β = 1.0
+	# γ = 0.5
+	# ε = 0.1
+	# σᵢ = 1.0
+	# σₑ = 1.0
+    # L = 70
+	# T = 30
 
+	#this is universal so I am leaving it here
 	species = [L"u", L"u_e", L"v"]
-    dim = 1; N = 1000; Δt = 1e-1;
-    xgrid, tgrid, sol, vis = bidomain(dim=dim, N=N, Δt=Δt);
-    plot_at_t(11, Δt, vis, xgrid, sol, species)
+
+	#plot intial conditions
+    #plot_initial_conditions_1D(70)
+
+	#solve problem in 1D
+    xgrid, tgrid, sol, vis = bidomain(dim=1, N=1000, Δt=1e-1);
+    #plot_at_t(11, 1e-1, vis, xgrid, sol, species)
+
+	#plot_species_3d(1, sol, species, xgrid, tgrid)
+
+	dim₂=2; N₂ = (100,25); Δt₂ = 1e-1;
+	xgrid₂, tgrid₂, sol₂, vis₂ = bidomain(dim=dim₂, N=N₂, Δt=Δt₂, Plotter=PyPlot);
+	contour_2d_at_t(2,3,xgrid₂,sol₂, species)
     
 end
