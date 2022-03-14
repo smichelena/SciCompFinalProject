@@ -4,7 +4,10 @@ import os
 import sys
 
 def make_a_gif(directory):
-    filenames = os.listdir(directory)
+    try:
+        filenames = os.listdir(directory)
+    except NotADirectoryError:
+        return
     filenames = natsort.natsorted(filenames)
     images = []
     for filename in filenames[0:-1:1]:
