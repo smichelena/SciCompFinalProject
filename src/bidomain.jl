@@ -308,14 +308,8 @@ function get_initial_data()
 	Array(DataFrame(CSV.File("../csv/initial_2D.csv")))
 end
 
-# ╔═╡ 8c168042-b17e-434f-b5da-423875d6cc37
-species = [L"u", L"u_e", L"v"]
-
-# ╔═╡ 7699e496-d0bd-4c39-9398-b90649694ea8
-dim = 1; N = 1000; Δt = 1e-1;
-
 # ╔═╡ 6ef697e9-a4b8-446e-bbb8-b577cea0161d
-function initial_cond(sys, xgrid, Tinit_solve, dim, initial2D, use_csv)
+function initial_cond(sys, xgrid, Δt, Tinit_solve, dim, initial2D, use_csv)
 	init = unknowns(sys)
 	U = unknowns(sys)
 	if dim==2 && initial2D
@@ -358,10 +352,7 @@ function bidomain(;N=100, dim=1, Δt=1e-3, T=30, Plotter=Plots,
 
 	boundaries = (dim == 1 ? 2 : 4)
 	enable_species!(sys, species=[1,2,3])
-	if dim==1
-		boundary_dirichlet!(sys,2,1,0)
-	else
-	end
+	boundary_dirichlet!(sys,2,1,0)
 	for ispec ∈ [1 3]
 		for ibc=1:boundaries
 			boundary_neumann!(sys,ispec,ibc,0)
@@ -369,7 +360,7 @@ function bidomain(;N=100, dim=1, Δt=1e-3, T=30, Plotter=Plots,
 	end
 
 
-	init = initial_cond(sys, xgrid, Tinit_solve, dim, initial2D, use_csv)
+	init = initial_cond(sys, xgrid, Δt, Tinit_solve, dim, initial2D, use_csv)
 	U = unknowns(sys)
 
 	SolArray = copy(init)
@@ -384,11 +375,17 @@ function bidomain(;N=100, dim=1, Δt=1e-3, T=30, Plotter=Plots,
 	return xgrid, tgrid, SolArray, vis, sys
 end
 
+# ╔═╡ 8c168042-b17e-434f-b5da-423875d6cc37
+species = [L"u", L"u_e", L"v"]
+
 # ╔═╡ 78e23bc8-da0f-4ba8-85ca-4d6f4b6d5538
 #gridx, gridt, sol1, vis1 = bidomain(N=(3,3),dim=2,T=1,Δt=10e-1);
 
-# ╔═╡ 88540b7a-90da-45a6-9025-fccafa4a19ff
-xgrid, tgrid, sol, vis = bidomain(dim=dim, N=N, T=T, Δt=Δt);
+# ╔═╡ 010d60c7-900e-46f4-ae87-2249abd17c16
+begin
+	dim = 1; N = 1000; Δt = 1e-1;
+	xgrid, tgrid, sol, vis = bidomain(dim=dim, N=N, T=T, Δt=Δt);
+end
 
 # ╔═╡ 45c86875-d68a-40d3-b340-d2b4af94e849
 function plot_at_t(t,vis,xgrid,sol)
@@ -491,6 +488,22 @@ function contour_2d_at_t(spec, t, Δt, xgrid, sol)
 	p
 end
 
+# ╔═╡ 17684f81-f302-4448-b86e-4f0457ad17ac
+function contour_subplots(spec, times, xgrid, sol; Δt=1e-1, save=false)
+	subplots = [(1,1),(1,2),(2,1),(2,2)]
+	p = GridVisualizer(resolution=(700,700),dim=2,Plotter=PyPlot,layout=(2,2),title="Solution with anisotropic conductivity")
+	cnt = 0
+	for (t,sp) ∈ zip(times,subplots)
+		cnt += 1
+		tₛ = Int16(round(t/Δt))+1
+		scalarplot!(p[sp...],
+			xgrid,sol[spec,:,tₛ], Plotter=PyPlot, colormap=:hot, 
+			title="t=$t", colorlevels=100, colorbar=false, framepos=cnt)
+	end
+	p.context[:title] = "Solution with anisotropic conductivity"
+	save ? p : reveal(p)
+end
+
 # ╔═╡ 4becbe30-d7a1-4949-a494-7f9bba8ed4c9
 contour_2d_at_t(2,3,Δt₂,xgrid₂,sol₂)
 
@@ -513,7 +526,34 @@ begin
 end;
 
 # ╔═╡ 65931b4e-2698-4ddc-990f-3d205bf0c686
-contour_2d_at_t(2,21,Δt₄,xgrid₄,sol₄)
+contour_2d_at_t(2,21,Δt₄,xgrid₄,sol₄);
+
+# ╔═╡ 7382dc48-0310-4070-b84f-bcc5217225d5
+md"""
+#### Solution to 2D problem with 1D problem setup for $u$:
+"""
+
+# ╔═╡ 04207117-c0ee-4b9b-9020-7593ab0478ca
+contour_subplots(1,[0,10,20,30],xgrid₂,sol₂;Δt=Δt₂)
+
+# ╔═╡ 81ba9ddf-e84f-463a-9ef7-dc574bf1b940
+function save_all_subplots()
+	plot_times = [0,10,20,30]
+	grids = [xgrid₂,xgrid₃,xgrid₄]
+	solutions = [sol₂,sol₃,sol₄]
+	Δtₛ = [Δt₂,Δt₃,Δt₄]
+	fnames = ["2D_with_1D_setup", "2D", "2D_with_anisotropic"]
+	for i ∈ length(grids)
+		grid = grids[i]; sol = solutions[i]; Δt = Δtₛ[i]; fname = fnames[i]
+		for spec ∈ 1:3
+			p = contour_subplots(spec, plot_times, grid, sol; Δt=Δt, save=true)
+			GridVisualize.save("../img/"*fname*"_spec"*string(spec)*".png", p)
+		end
+	end
+end
+
+# ╔═╡ 6f9637b0-f2a1-426b-b5cb-a3a7764bcf88
+save_all_subplots()
 
 # ╔═╡ 557cc2d0-780a-4f6f-b5c9-6ae9bc31b014
 function images_for_gif(spec, folder, xgrid, sol; steps=5)
@@ -533,6 +573,7 @@ end
 for spec=1:3
 	images_for_gif(spec, "contour_plot_species", xgrid₂, sol₂; steps=5)
 	images_for_gif(spec, "contour_plot_2D_species", xgrid₃, sol₃; steps=5)
+	images_for_gif(spec, "contour_plot_2Danisotropic_species", xgrid₄, sol₄; steps=5)
 end
 
 # ╔═╡ 6b1e8f04-ae8b-4758-86d9-b947e1620c0d
@@ -2075,9 +2116,8 @@ version = "0.9.1+5"
 # ╠═d5315aef-978d-447f-85dc-a3becdc33078
 # ╠═f19b980c-7d6c-41c6-99af-8475f7aa72db
 # ╠═8c168042-b17e-434f-b5da-423875d6cc37
-# ╠═7699e496-d0bd-4c39-9398-b90649694ea8
 # ╠═78e23bc8-da0f-4ba8-85ca-4d6f4b6d5538
-# ╠═88540b7a-90da-45a6-9025-fccafa4a19ff
+# ╠═010d60c7-900e-46f4-ae87-2249abd17c16
 # ╠═45c86875-d68a-40d3-b340-d2b4af94e849
 # ╠═d477647c-de1f-4dbf-b982-c1577adcf398
 # ╠═6fcf5e8c-c44e-4684-b512-cef6031ad66b
@@ -2088,11 +2128,16 @@ version = "0.9.1+5"
 # ╠═e7587ca1-7116-4526-8d45-4c76941a98c7
 # ╠═a24ebb01-038c-4107-b730-887a86a14fe7
 # ╠═0edfe024-2786-4570-96f2-f02a083553f6
+# ╠═17684f81-f302-4448-b86e-4f0457ad17ac
 # ╠═4becbe30-d7a1-4949-a494-7f9bba8ed4c9
 # ╠═c1d04237-1696-4c08-9e78-7e7c0d659d0b
 # ╠═c7106eb9-b54d-4473-8ff4-2b8707260cec
 # ╠═36854b9a-39f3-4fca-94da-f9f97cee1663
 # ╠═65931b4e-2698-4ddc-990f-3d205bf0c686
+# ╟─7382dc48-0310-4070-b84f-bcc5217225d5
+# ╠═04207117-c0ee-4b9b-9020-7593ab0478ca
+# ╠═81ba9ddf-e84f-463a-9ef7-dc574bf1b940
+# ╠═6f9637b0-f2a1-426b-b5cb-a3a7764bcf88
 # ╠═557cc2d0-780a-4f6f-b5c9-6ae9bc31b014
 # ╠═33539ff5-9634-457d-991e-6af44184ce62
 # ╠═6b1e8f04-ae8b-4758-86d9-b947e1620c0d
