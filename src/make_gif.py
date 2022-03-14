@@ -6,7 +6,7 @@ import sys
 def make_a_gif(directory):
     try:
         filenames = os.listdir(directory)
-    except:
+    except NotADirectoryError:
         return
     filenames = natsort.natsorted(filenames)
     images = []
