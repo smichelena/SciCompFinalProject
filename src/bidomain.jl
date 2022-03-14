@@ -101,7 +101,7 @@ With $f$ and $g$ defined as
 ```math
 \math{
 f(u,v) &= u - \frac{u^3}{3} - v\\
-g(u,v) &= u + \beta -\gamma v.
+g(u,v) &= u + \beta -\varphi v.
 }
 ```
 """
@@ -125,8 +125,8 @@ We can get the exact solution to $f=g=0$:
 ```math
 \math{
 	0 &= f(u_{0,1},v_0) =  u_{0,1} - \frac{u_{0,1}^3}{3} - v_0 \Rightarrow v_0 = u_{0,1} - \frac{u_{0,1}^3}{3}\\
-	0&=  g(u_{0,1},v_0) = u_{0,1} + \beta - \gamma v_0 \Rightarrow  0 = u_{0,1} + \beta -\gamma\pth{u_{0,1} - \frac{u_{0,1}^3}{3}}\Rightarrow\\
-	0 &=  u_{0,1}^3\frac{\gamma}{3} +u_{0,1}\pth{1-\gamma} +\beta
+	0&=  g(u_{0,1},v_0) = u_{0,1} + \beta - \varphi v_0 \Rightarrow  0 = u_{0,1} + \beta -\varphi\pth{u_{0,1} - \frac{u_{0,1}^3}{3}}\Rightarrow\\
+	0 &=  u_{0,1}^3\frac{\varphi}{3} +u_{0,1}\pth{1-\varphi} +\beta
 }
 ```
 which has three solutions since it is a polynomial of degree 3. Two of them are complex, whilst the third one is real. We find the solution by using Newton's method since the expression for the solution of a 3rd degree polynomial is very verbose.
@@ -142,10 +142,10 @@ When doing the finite volume discretization we need to split the polygonal domai
 	N &= \brc{1,\dots,n_c}\\
 	\partial\Omega &= \bigcup_{m\in G}\Gamma_m\\
 	G &= \brc{1,\dots,n_e}\\
-	\upsilon_{kl} &= \bar\omega_k\cup\bar\omega_l
+	\s_{kl} &= \bar\omega_k\cup\bar\omega_l
 }
 ```
-where $n_c$ is the number of control volumes, $n_e$ the number of edges of the polygonal domain. We have that $|\upsilon_{kl}|>0$ makes $\omega_k$,$\omega_l$ neighbours. We define the part of $\omega_k$ that is on the boundary of $\Omega$ as
+where $n_c$ is the number of control volumes, $n_e$ the number of edges of the polygonal domain. We have that $|s_{kl}|>0$ makes $\omega_k$,$\omega_l$ neighbours. We define the part of $\omega_k$ that is on the boundary of $\Omega$ as
 ```math
 \math{
 	\gamma_{km} = \partial\omega_k \cup \Gamma_m
@@ -154,7 +154,222 @@ where $n_c$ is the number of control volumes, $n_e$ the number of edges of the p
 """
 
 # ╔═╡ 3ee2e07c-3463-470b-a478-bc7e2464389d
+md"""
+#### Discretization of equation 1
+Integrate over a control volume $\omega_k$:
+```math
+\begin{equation}
+   \int_{\omega_k}\frac{\partial u}{\partial t}=\int_{\omega_k}\frac{1}{\eps}f(u,v)d\omega +
+       \int_{\omega_k}\nabla \cdot (\sigma_i \nabla u)d\omega + \int_{\omega_k}\nabla \cdot (\sigma_i \nabla u_e)d\omega
+\end{equation}
+```
+Apply Gauss' thereom to the two divergence terms:
+```math
+\begin{equation}
+    \int_{\omega_k}\frac{\partial u}{\partial t} =\int_{\omega_k}\frac{1}{\eps}f(u,v)d\omega +
+    \int_{d\omega_k}\sigma_i \nabla u \cdot \vec{n}ds +
+    \int_{d\omega_k}\sigma_i \nabla u_e \cdot \vec{n}ds
+\end{equation}
+```
+Convert the surface integrals over the edge of the control volume into a sum of an integral over each side, as our Voronoi cell control volumes are polygons. Additionally, introduce a separate term for the surface integral over the specific case of sides that are boundary conditions.
+```math
+\begin{align*}
+    \int_{\omega_k}\frac{\partial u}{\partial t} &=\int_{\omega_k}\frac{1}{\eps}f(u,v)d\omega \\ 
+    &+ \sum_{l \in N_k}\int_{s_{kl}} \sigma_i \nabla u \cdot \vec{n}_{kl}ds +
+    \sum_{m \in B_k}\int_{\gamma_{kl}} \sigma_i \nabla u \cdot \vec{n}_{m}ds \\
+    &+ \sum_{l \in N_k}\int_{s_{kl}} \sigma_i \nabla u_e \cdot \vec{n}_{kl}ds +
+    \sum_{m \in B_k}\int_{\gamma_{kl}} \sigma_i \nabla u_e \cdot \vec{n}_{m}ds
+\end{align*}
+```
+Exploiting the admissibility condition, approximate the dot products using finite differences:
+```math
+\begin{equation}
+    \sigma_i \nabla u \cdot \vec{n} = \sigma_i \frac{u_k - u_l}{|x_k - x_l|}
+    \sigma_i \nabla u_e \cdot \vec{n} = \sigma_i \frac{u_{e_k} - u_{e_l}}{|x_k - x_l|}
+\end{equation}
+```
+Substitute this approximation in and replace the integrals with a simple multiplication by the length of the cell border. Additionally expanding $f(u,v)$:
+```math
+\begin{align*}
+|\omega_k|\frac{\partial u_k}{\partial t} &= \int_{w_k}\frac{1}{\eps}(u - \frac{u^3}{3} - v)d\omega\\
+&+ \sum_{l \in N_k} |s_{kl}| \sigma_i  \frac{u_k - u_l}{|x_k - x_l|}  + 
+\sum_{m \in B_k} |\gamma_{km}| \sigma_i  \frac{u_k - u_l}{|x_k - x_l|}   \\
+&+ \sum_{l \in N_k} |s_{kl}| \sigma_i  \frac{u_{e_k} - u_{e_l}}{|x_k - x_l|}  + 
+\sum_{m \in B_k} |\gamma_{km}| \sigma_i  \frac{u_{e_k} - u_{e_l}}{|x_k - x_l|}  
+\end{align*}
+```
+Combine terms, and note the first integral simply becomes a multiplication by $|\omega_k|$:
+```math
+\begin{align*}
+|\omega_k|\frac{\partial u_k}{\partial t} &= \frac{|\omega_k|}{\eps}\pth{u - \frac{u^3}{3} - v}\\
+&+ \sum_{l \in N_k} |s_{kl}| \sigma_i  \frac{u_k - u_l + u_{e_k} - u_{e_l}}{|x_k - x_l|} \\
+&+ \sum_{m \in B_k} |\gamma_{km}| \sigma_i  \frac{u_k - u_l + u_{e_k} - u_{e_l}}{|x_k - x_l|}  
+\end{align*}
+```
+Move the boundary terms to the other side and organize so it is on the right:
+```math
+\begin{align*}
+|\omega_k|\frac{\partial u_k}{\partial t} + \sum_{l \in N_k} |s_{kl}| \sigma_i \frac{u_k - u_l + u_{e_k} - u_{e_l}}{|x_k - x_l|} 
+&+ \frac{|\omega_k|}{\eps}\pth{u_k - \frac{u_k^3}{3} - v_k}
+=\\
+-\sum_{m \in B_k} |\gamma_{km}| \sigma_i  \frac{u_k - u_l + u_{e_k} - u_{e_l}}{|x_k - x_l|} 
+\end{align*}
+```
+"""
 
+# ╔═╡ 2a0bc645-8dec-454e-9eb8-623c7e95a20c
+md"""
+#### Discretization of equation 2
+Distrbute the divergence and integrate over a volume $\omega_k$:
+
+```math
+\begin{align*}
+0 = \int_{\omega_k} \nabla \cdot \pth{\sigma_i \nabla u}d\omega + \int_{\omega_k}\nabla \cdot \pth{\sigma_i + \sigma_e}\nabla u_e d\omega
+\end{align*}
+```
+Apply Gauss' theorem:
+```math
+\begin{align*}
+0 = \int_{d\omega_k} \pth{\sigma_i \nabla u}\cdot \vec{n}ds + \int_{d\omega_k}\pth{\sigma_i + \sigma_e}\nabla u_e \cdot \vec{n} ds
+\end{align*}
+```
+Again convert these terms to a sum of the integral over each side of the volume, and add terms for the boundary conditions:
+```math
+\begin{align*}
+    0 &= \sum_{l \in N_k}\int_{s_{kl}} \sigma_i \nabla u \cdot \vec{n}_{kl}ds +
+    \sum_{m \in B_k}\int_{\gamma_{kl}} \sigma_i \nabla u \cdot \vec{n}_{m}ds \\
+    &+ \sum_{l \in N_k}\int_{s_{kl}} \pth{\sigma_i + \sigma_e} \nabla u_e \cdot \vec{n}_{kl}ds +
+    \sum_{m \in B_k}\int_{\gamma_{kl}} \pth{\sigma_i + \sigma_e}\nabla u_e \cdot \vec{n}_{m}ds
+\end{align*}
+```
+Again approximate the dot products as finite differences, and replace the integrals by the length of the cell border:
+```math
+\begin{align*}
+0 &= \sum_{l \in N_k} |s_{kl}| \sigma_i \pth{ \frac{u_k - u_l}{|x_k - x_l|} } + 
+\sum_{m \in B_k} |\gamma_{km}| \sigma_i \pth{ \frac{u_k - u_l}{|x_k - x_l|} }  \\
+&+ \sum_{l \in N_k} |s_{kl}| \pth{\sigma_i+\sigma_e} \pth{ \frac{u_{e_k} - u_{e_l}}{|x_k - x_l|} } + 
+\sum_{m \in B_k} |\gamma_{km}| \pth{\sigma_i+\sigma_e} \pth{ \frac{u_{e_k} - u_{e_l}}{|x_k - x_l|} }
+\end{align*}
+```
+Move the boundary conditions to the opposite side:
+```math
+\begin{align*}
+\sum_{l \in N_k} |s_{kl}| \sigma_i \frac{u_k - u_l}{|x_k - x_l|}
++ \sum_{l \in N_k} |s_{kl}| \pth{\sigma_i+\sigma_e}  \frac{u_{e_k} - u_{e_l}}{|x_k - x_l|}  = \\
+-\sum_{m \in B_k} |\gamma_{km}| \sigma_i \frac{u_k - u_l}{|x_k - x_l|}  
+-\sum_{m \in B_k} |\gamma_{km}| (\sigma_i+\sigma_e)  \frac{u_{e_k} - u_{e_l}}{|x_k - x_l|}
+\end{align*}
+```
+"""
+
+# ╔═╡ 2cb6b44b-6236-40e3-a945-4bb8df3cae1e
+md"""
+#### Discretization of equation 3
+With 
+```math
+\begin{align*}
+\frac{\partial v}{\partial t} - \eps(u + \beta - \varphi v) = 0
+\end{align*}
+```
+We take the integral as before with respect to the volume $\omega_k$:
+```math
+\begin{align*}
+\int_{\omega_k}\frac{\partial v}{\partial t} d\omega - \int_{\omega_k} \eps(u + \beta - \varphi v)d\omega = 0
+\end{align*}
+```
+The integral is simply a multiplication by the area of the volume:
+```math
+\begin{align*}
+|\omega_k|\frac{\partial v_k}{\partial t} - \eps |\omega_k| (u_k + \beta - \varphi v_k) = 0
+\end{align*}
+```
+
+This concludes the space discretization.
+"""
+
+# ╔═╡ d7aeab82-eab7-44f1-8586-4504287a4dfc
+md"""
+### Time discretization
+
+There are a few possibilities for the time discretization:
+
+"""
+
+# ╔═╡ 042f94d9-04d0-4a03-b3b6-375f8b22953b
+md"""
+#### Implicit Euler
+With an implicit euler we approximate $\frac{\partial v}{\partial t}$ by a finite difference between the current time step and the last time step. This provides an easy implementation as all we need to implement this approximation is a storage of the previous v. We can then simply solve the resulting system to find the current v.
+"""
+
+# ╔═╡ ac978664-28a5-40bb-8a99-4efbf3c6c6fe
+md"""
+#### Explicit Euler
+TODO: I think part of the answer here is that it is a coupled partial differential equation. We can't explicitly solve for v in this timestep because it will be in terms of u - which itself is dependent on v. 
+
+i.e. There is no 
+"""
+
+# ╔═╡ f7b01945-65e0-4057-b84d-dcd298ce766c
+md"""
+#### 
+We approximate: 
+```math
+\begin{align*}
+ |\omega_k|\frac{\partial u}{\partial t} \approx \frac{u_i - u_{i-1}}{\Delta t}  
+\end{align*}
+```
+and
+```math
+\begin{align*}
+ |\omega_k|\frac{\partial v}{\partial t} \approx \frac{v_i - v_{i-1}}{\Delta t}  
+\end{align*}
+```
+Where $i$ is the current time step. 
+
+The first equation becomes:
+
+```math
+\begin{align*}
+\frac{u_{k,i} - u_{k,i-1}}{\Delta t}   + \sum_{l \in N_k} |s_{kl}| \sigma_i  \frac{u_k - u_l + u_{e_k} - u_{e_l}}{|x_k - x_l|} 
+&+ \frac{|\omega_k|}{\eps}\pth{u_k - \frac{u_k^3}{3} - v_k}
+=\\ -\sum_{m \in B_k} |\gamma_{km}| \sigma_i  \frac{u_k - u_l + u_{e_k} - u_{e_l}}{|x_k - x_l|} 
+\end{align*}
+```
+
+And the third equation, discretized in time as well as space, is then:
+```math
+\begin{align*}
+|\omega_k| \frac{v_{k,i} - v_{k,i-1}}{\Delta t}  - \eps |\omega_k| \pth{u + \beta - \varphi v} = 0
+\end{align*}
+```
+"""
+
+# ╔═╡ 63d685c1-dcd1-454f-8e56-f697e7aca8fb
+md"""
+### Discretization summary
+In total, for the discretization of the problem, we are left with a nonlinear system of equations that must be solved at each time step:
+
+```math
+\begin{align*}
+\frac{u_{k,i} - u_{k,i-1}}{\Delta t}   + \sum_{l \in N_k} |s_{kl}| \sigma_i  \frac{u_k - u_l + u_{e_k} - u_{e_l}}{|x_k - x_l|} 
++ \frac{|\omega_k|}{\eps}\pth{u_k - \frac{u_k^3}{3} - v_k}
+&=\\ -\sum_{m \in B_k} |\gamma_{km}| \sigma_i  \frac{u_k - u_l + u_{e_k} - u_{e_l}}{|x_k - x_l|} 
+\\
+\sum_{l \in N_k} |s_{kl}| \sigma_i  \frac{u_k - u_l}{|x_k - x_l|}
++ \sum_{l \in N_k} |s_{kl}| (\sigma_i+\sigma_e)  \frac{u_{e_k} - u_{e_l}}{|x_k - x_l|}  &= \\
+-\sum_{m \in B_k} |\gamma_{km}| \sigma_i  \frac{u_k - u_l}{|x_k - x_l|} 
+-\sum_{m \in B_k} |\gamma_{km}| (\sigma_i+\sigma_e)  \frac{u_{e_k} - u_{e_l}}{|x_k - x_l|}\\
+|\omega_k| \frac{v_{k,i} - v_{k,i-1}}{\Delta t}  - \eps |\omega_k|\pth{u_k + \beta - \varphi v_k} &= 0
+\end{align*}
+```
+Where $i$ is the current time step.
+"""
+
+# ╔═╡ 3e1c814e-f69d-4839-8ca1-ed03952188a8
+md"""
+# Discrete solution using VoronoiFVM
+### 1D Problem
+"""
 
 # ╔═╡ 71943829-1f12-46ce-8347-99a4aebac3d4
 begin
@@ -263,8 +478,19 @@ let
 	Plots.plot!(p,X,v₀,label=L"v_0",lw=lw, color="Green")
 end
 
+# ╔═╡ 1fc8a5f0-fa99-44c6-a19a-3334e20eec15
+function get_σₛ(σᵢ,σₑ,edge)
+	n1 = edge.coord[:,edge.node[1]]
+	n2 = edge.coord[:,edge.node[2]]
+	x = abs(n1[1] - n2[1]); y = abs(n1[2] - n2[2])
+	θ = atan(y/x)
+	l = [1 1]; r = [sin(θ);cos(θ)]
+	σᵢ_θ = (l*σᵢ*r)[1]; σₑ_θ = (l*σₑ*r)[1]
+	σᵢ_θ, σₑ_θ
+end
+
 # ╔═╡ 6cb8de00-62a6-46b0-a367-21a282e4ff89
-function create_physics(σᵢ, σₑ)
+function create_physics(σᵢ_orig, σₑ_orig; initial2D=false, anisotropic=false)
 	physics = VoronoiFVM.Physics(
 		storage = function(y,u,node)
 			y[1] = u[1]
@@ -272,6 +498,7 @@ function create_physics(σᵢ, σₑ)
 			y[3] = u[3]
 		end,
 		flux = function(y,u,edge)
+			σᵢ, σₑ = anisotropic ? get_σₛ(σᵢ_orig,σₑ_orig,edge) : (σᵢ_orig,σₑ_orig)
 			y[1] = -σᵢ*(u[1,2]-u[1,1] + u[2,2]-u[2,1])
 			y[2] = σᵢ*(u[1,2]-u[1,1]) + (σᵢ+σₑ)*(u[2,2]-u[2,1])
 			y[3] = 0
@@ -281,42 +508,44 @@ function create_physics(σᵢ, σₑ)
 			y[2] = 0
 			y[3] = -ε*g(u[1],u[3])
 		end,
+		breaction = function(y,u,node)
+			if node.coord[:,node.index] == [0, 0]
+				y[2] = 0
+			end
+		end,
 	)
 end
 
 # ╔═╡ d5315aef-978d-447f-85dc-a3becdc33078
-function save_initial(init)
+function save_initial(init, filename)
 	mkpath("../csv")
 	df = DataFrame(init, :auto)
-	CSV.write("../csv/initial_2D.csv", df)
+	CSV.write("../csv/$filename", df)
 end
 
 # ╔═╡ f19b980c-7d6c-41c6-99af-8475f7aa72db
-function get_initial_data()
-	Array(DataFrame(CSV.File("../csv/initial_2D.csv")))
+function get_initial_data(filename)
+	Array(DataFrame(CSV.File("../csv/$filename")))
 end
 
-# ╔═╡ 8c168042-b17e-434f-b5da-423875d6cc37
-species = [L"u", L"u_e", L"v"]
-
-# ╔═╡ 7699e496-d0bd-4c39-9398-b90649694ea8
-dim = 1; N = 1000; Δt = 1e-1;
-
 # ╔═╡ 6ef697e9-a4b8-446e-bbb8-b577cea0161d
-function initial_cond(sys, xgrid, Tinit_solve, dim, initial2D, use_csv)
+function initial_cond(sys, xgrid, Δt, Tinit_solve, 
+		dim, initial2D, use_csv, anisotropic)
 	init = unknowns(sys)
 	U = unknowns(sys)
+	filename="initial_2D"*(anisotropic ? "_anisotropic" : "")*".csv"
 	if dim==2 && initial2D
 		if use_csv
-			init = get_initial_data()
+			init = get_initial_data(filename)
 		else
 			inival = map(u⃗₀_2D, xgrid)
 			init .= [tuple[k] for tuple in inival, k in 1:3]'
 			for t ∈ 0:Δt:Tinit_solve
+				println("t:$t")
 				solve!(U, init, sys; tstep=Δt)
 				init .= U
 			end
-			save_initial(init)
+			save_initial(init, filename)
 		end
 	else
 		inival = map(u⃗₀, xgrid)
@@ -336,7 +565,7 @@ function bidomain(;N=100, dim=1, Δt=1e-3, T=30, Plotter=Plots,
 	xgrid = create_grid(N, dim)
 
 	σᵢ, σₑ = anisotropic ? (σᵢ_anisotropic, σₑ_anisotropic) : (σᵢ_normal, σₑ_normal)
-	physics = create_physics(σᵢ,σₑ)
+	physics = create_physics(σᵢ,σₑ; anisotropic=anisotropic)
 	
 	sys = VoronoiFVM.System(
 		xgrid,
@@ -346,9 +575,8 @@ function bidomain(;N=100, dim=1, Δt=1e-3, T=30, Plotter=Plots,
 
 	boundaries = (dim == 1 ? 2 : 4)
 	enable_species!(sys, species=[1,2,3])
-	if dim==1
+	if !initial2D || true
 		boundary_dirichlet!(sys,2,1,0)
-	else
 	end
 	for ispec ∈ [1 3]
 		for ibc=1:boundaries
@@ -356,13 +584,14 @@ function bidomain(;N=100, dim=1, Δt=1e-3, T=30, Plotter=Plots,
 		end
 	end
 
-
-	init = initial_cond(sys, xgrid, Tinit_solve, dim, initial2D, use_csv)
+	init = initial_cond(sys, xgrid, Δt, Tinit_solve, 
+		dim, initial2D, use_csv, anisotropic)
 	U = unknowns(sys)
 
 	SolArray = copy(init)
 	tgrid = initial2D ? (Tinit_solve:Δt:T+Tinit_solve) : (0:Δt:T)
 	for t ∈ tgrid[2:end]
+		println("t:$t")
 		solve!(U, init, sys; tstep=Δt)
 		init .= U
 		SolArray = cat(SolArray, copy(U), dims=3)
@@ -371,19 +600,25 @@ function bidomain(;N=100, dim=1, Δt=1e-3, T=30, Plotter=Plots,
 	return xgrid, tgrid, SolArray, vis, sys
 end
 
-# ╔═╡ 78e23bc8-da0f-4ba8-85ca-4d6f4b6d5538
-gridx, gridt, sol1, vis1 = bidomain(N=(3,3),dim=2,T=1,Δt=10e-1);
+# ╔═╡ 8c168042-b17e-434f-b5da-423875d6cc37
+species = [L"u", L"u_e", L"v"]
 
-# ╔═╡ 88540b7a-90da-45a6-9025-fccafa4a19ff
-xgrid, tgrid, sol, vis = bidomain(dim=dim, N=N, T=T, Δt=Δt);
+# ╔═╡ 4db8713f-e828-4bc7-a1a1-8c933ef8e4d5
+_,_,_,_,sys=bidomain(dim=2,N=(3,3),T=1,Δt=10e-1);
+
+# ╔═╡ 010d60c7-900e-46f4-ae87-2249abd17c16
+begin
+	dim = 1; N = 1000; Δt = 1e-1;
+	xgrid, tgrid, sol, vis = bidomain(dim=dim, N=N, T=T, Δt=Δt);
+end;
 
 # ╔═╡ 45c86875-d68a-40d3-b340-d2b4af94e849
-function plot_at_t(t,vis,xgrid,sol)
+function plot_at_t(t,vis,xgrid,sol; title="")
 	tₛ = Int16(round(t/Δt))+1
 	scalarplot!(vis, xgrid, sol[1,:,tₛ], linestyle=:solid)
 	scalarplot!(vis, xgrid, sol[2,:,tₛ], linestyle=:dash)
 	plotted_sol = scalarplot!(
-		vis, xgrid, sol[3,:,tₛ], linestyle=:dot, legend=:best, show=true)
+		vis, xgrid, sol[3,:,tₛ], linestyle=:dot, legend=:best, show=true, title=title)
 	for (i,spec) ∈ zip(2 .* (1:length(species)), species)
 		plotted_sol[1][i][:label] = spec
 	end
@@ -392,8 +627,13 @@ function plot_at_t(t,vis,xgrid,sol)
 	plotted_sol
 end
 
+# ╔═╡ 299c8cf9-4a7e-418c-9bf4-fa8e42da72e6
+md"""
+#### Solution to 1D problem for t=11
+"""
+
 # ╔═╡ d477647c-de1f-4dbf-b982-c1577adcf398
-plot_at_t(11,vis,xgrid,sol)
+plot_at_t(11,vis,xgrid,sol;title="1D problem at t=11")
 
 # ╔═╡ 6fcf5e8c-c44e-4684-b512-cef6031ad66b
 begin
@@ -401,7 +641,7 @@ begin
 		plot_at_t(t,vis,xgrid,sol)
 	end
 	gif(anim, "../movies/1D_solution.gif", fps=15)
-end
+end;
 
 # ╔═╡ 882e929d-0188-4907-92ef-d9066b92148c
 function plot_species_3d(spec)
@@ -427,7 +667,7 @@ function plot_species_3d(spec)
 end
 
 # ╔═╡ 61377a01-378d-4ea5-bcfd-b827acfba523
-function contour_plot(spec)
+function contour_plot(spec; initial2D=false, anisotropic=false)
 	PyPlot.clf()
 	Xgrid = xgrid[Coordinates][:]
 	Tgrid = tgrid
@@ -444,7 +684,8 @@ function contour_plot(spec)
 	PyPlot.ylabel(L"t")
 	figure=PyPlot.gcf()
 	figure.set_size_inches(7,7)
-	PyPlot.savefig("../img/st_contour_plot_species_"*string(spec))
+	extra = initial2D ? ("_inital2D") : (anisotropic ? "_anisotropic" : "") 
+	PyPlot.savefig("../img/st_contour_plot_spec_"*string(spec)*extra)
 	figure
 end
 
@@ -457,6 +698,11 @@ contour_plot(2)
 # ╔═╡ e7587ca1-7116-4526-8d45-4c76941a98c7
 contour_plot(3)
 
+# ╔═╡ 1bda87c6-5e03-4e0a-a029-47d541c3f06a
+md"""
+### 2D Problem with 1D problem setup
+"""
+
 # ╔═╡ a24ebb01-038c-4107-b730-887a86a14fe7
 begin
 	dim₂=2; N₂ = (100,25); Δt₂ = 1e-1;
@@ -464,30 +710,110 @@ begin
 end;
 
 # ╔═╡ 0edfe024-2786-4570-96f2-f02a083553f6
-function contour_2d_at_t(spec, t, Δt, xgrid, sol)
+function contour_2d_at_t(spec, t, Δt, xgrid, sol, title)
 	tₛ = Int16(round(t/Δt))+1
 	p = scalarplot(
 		xgrid,sol[spec,:,tₛ], Plotter=PyPlot, colormap=:hot, 
-		title="2D problem with 1D problem setup for "*species[spec]*
-		" at t="*string(t),
-		colorlevels=100, isolines=0)
+		title=title, colorlevels=100, isolines=0)
 	p.set_size_inches(7,7)
 	PyPlot.xlabel(L"x")
 	PyPlot.ylabel(L"y")
 	p
 end
 
+# ╔═╡ 17684f81-f302-4448-b86e-4f0457ad17ac
+function contour_subplots(spec, times, xgrid, sol; Δt=1e-1, save=false)
+	subplots = [(1,1),(1,2),(2,1),(2,2)]
+	p = GridVisualizer(resolution=(700,700),dim=2,Plotter=PyPlot,layout=(2,2),title="Solution with anisotropic conductivity")
+	cnt = 0
+	for (t,sp) ∈ zip(times,subplots)
+		cnt += 1
+		tₛ = Int16(round(t/Δt))+1
+		scalarplot!(p[sp...],
+			xgrid,sol[spec,:,tₛ], Plotter=PyPlot, colormap=:hot, 
+			title="t=$t", colorlevels=100, colorbar=false, framepos=cnt)
+	end
+	p.context[:title] = "Solution with anisotropic conductivity"
+	save ? p : reveal(p)
+end
+
 # ╔═╡ 4becbe30-d7a1-4949-a494-7f9bba8ed4c9
-contour_2d_at_t(2,3,Δt₂,xgrid₂,sol₂)
+contour_2d_at_t(2,3,Δt₂,xgrid₂,sol₂,
+	"2D problem with 1D problem setup for "*species[2]*" at t="*string(3))
+
+# ╔═╡ b01448fa-c503-4f30-9414-c091bc58b21a
+times = [0,10,20,30];
+
+# ╔═╡ 2c2c89f8-5d82-4f43-a679-0b3c5c379f30
+md"""
+#### Solution to 2D problem with 1D problem setup for $u$:
+"""
+
+# ╔═╡ 552af2fb-d17e-4c06-b3f9-856731652f1f
+contour_subplots(1,times,xgrid₂,sol₂;Δt=Δt₂)
+
+# ╔═╡ 7dec0320-4406-4360-9e2c-0f0ca2db0afe
+md"""
+#### Solution to 2D problem with 1D problem setup for $u_e$:
+"""
+
+# ╔═╡ 5d46a365-86f1-41a2-b171-600ad4d92549
+contour_subplots(2,times,xgrid₂,sol₂;Δt=Δt₂)
+
+# ╔═╡ 9e678ba2-a061-4482-b647-1614494f0b14
+md"""
+#### Solution to 2D problem with 1D problem setup for $v$:
+"""
+
+# ╔═╡ 6ec24d7f-51b4-48f7-8435-5075e4677ee9
+contour_subplots(3,times,xgrid₂,sol₂;Δt=Δt₂)
+
+# ╔═╡ 324ecfc7-cdf6-4e2b-9e56-78a9baae0263
+md"""
+### 2D Problem
+"""
 
 # ╔═╡ c1d04237-1696-4c08-9e78-7e7c0d659d0b
 begin
 	dim₃=2; N₃ = (100,25); Δt₃ = 1e-1;
 	xgrid₃, tgrid₃, sol₃, vis₃ = bidomain(
-		dim=dim₃, N=N₃, T=T, Δt=Δt₃, Plotter=PyPlot, initial2D=true, use_csv=true);
+		dim=dim₃, N=N₃, T=T, Δt=Δt₃, Plotter=PyPlot, initial2D=true, Tinit_solve=0)
 end;
 
-# ╔═╡ 8bf36fd9-abf0-49fc-b4f3-0f10ba1ade1f
+# ╔═╡ c7106eb9-b54d-4473-8ff4-2b8707260cec
+contour_2d_at_t(2,5,Δt₃,xgrid₃,sol₃,
+	"2D problem for "*species[2]*" at t="*string(5))
+
+# ╔═╡ c5bbd72e-9e33-496c-8d7a-31b1bf02c00f
+md"""
+#### Solution to 2D problem for $u$:
+"""
+
+# ╔═╡ ac916c5d-0ab5-44d5-8b01-c36c0679ff75
+contour_subplots(1,times,xgrid₃,sol₃;Δt=Δt₃)
+
+# ╔═╡ 07a2808d-c680-4118-b9de-23f69369888b
+md"""
+#### Solution to 2D problem with 1D problem setup for $u_e$:
+"""
+
+# ╔═╡ 471473df-ac49-421f-a371-af88e92f14db
+contour_subplots(2,times,xgrid₃,sol₃;Δt=Δt₃)
+
+# ╔═╡ a4b916ca-142b-4e26-ad9c-16d5a03acfe9
+md"""
+#### Solution to 2D problem for $v$:
+"""
+
+# ╔═╡ 1dea2df4-2124-4052-bb81-45733cfc5de7
+contour_subplots(3,times,xgrid₃,sol₃;Δt=Δt₃)
+
+# ╔═╡ d65e72f0-172d-494f-866f-5b9541035b6f
+md"""
+### 2D Problem with anisotropic conductivity
+"""
+
+# ╔═╡ 36854b9a-39f3-4fca-94da-f9f97cee1663
 begin
 	dim₄=2; N₄=(100,25); Δt₄=1e-1;
 	xgrid₄, tgrid₄, sol₄, vis₄ = bidomain(
@@ -495,8 +821,52 @@ begin
 		anisotropic=true);
 end;
 
-# ╔═╡ c7106eb9-b54d-4473-8ff4-2b8707260cec
-contour_2d_at_t(2,21,Δt₃,xgrid₃,sol₃)
+# ╔═╡ 65931b4e-2698-4ddc-990f-3d205bf0c686
+contour_2d_at_t(2,21,Δt₄,xgrid₄,sol₄, 
+	"2D problem with anisotropic conductivity for "*species[2]*" at t="*string(21))
+
+# ╔═╡ cffaed3f-b4bd-4507-a62f-91831f9729b4
+md"""
+#### Solution to 2D problem with anisotropic conductivity for $u$:
+"""
+
+# ╔═╡ 841f7675-fc4a-43f4-9ab6-1a20caf3315c
+contour_subplots(1,times,xgrid₄,sol₄;Δt=Δt₄)
+
+# ╔═╡ 8febdb97-da8f-431b-a0ca-95b857ab138e
+md"""
+#### Solution to 2D problem with anisotropic conductivity for $u_e$:
+"""
+
+# ╔═╡ f41540ac-e2ce-4fbf-9e0c-08a860a9a41d
+contour_subplots(2,times,xgrid₄,sol₄;Δt=Δt₄)
+
+# ╔═╡ 22f143da-3dbc-4566-a99d-470fb5e87047
+md"""
+#### Solution to 2D problem with anisotropic conductivity for $v$:
+"""
+
+# ╔═╡ 6c1126d4-33ce-4e10-9a2c-b815b144498b
+contour_subplots(3,times,xgrid₄,sol₄;Δt=Δt₄)
+
+# ╔═╡ 81ba9ddf-e84f-463a-9ef7-dc574bf1b940
+function save_all_subplots()
+	plot_times = [0,10,20,30]
+	grids = [xgrid₂,xgrid₃,xgrid₄]
+	solutions = [sol₂,sol₃,sol₄]
+	Δtₛ = [Δt₂,Δt₃,Δt₄]
+	fnames = ["2D_with_1D_setup", "2D", "2D_with_anisotropic"]
+	for i ∈ length(grids)
+		grid = grids[i]; sol = solutions[i]; Δt = Δtₛ[i]; fname = fnames[i]
+		for spec ∈ 1:3
+			p = contour_subplots(spec, plot_times, grid, sol; Δt=Δt, save=true)
+			GridVisualize.save("../img/"*fname*"_spec"*string(spec)*".png", p)
+		end
+	end
+end
+
+# ╔═╡ 6f9637b0-f2a1-426b-b5cb-a3a7764bcf88
+save_all_subplots()
 
 # ╔═╡ 557cc2d0-780a-4f6f-b5c9-6ae9bc31b014
 function images_for_gif(spec, folder, xgrid, sol; steps=5)
@@ -516,7 +886,20 @@ end
 for spec=1:3
 	images_for_gif(spec, "contour_plot_species", xgrid₂, sol₂; steps=5)
 	images_for_gif(spec, "contour_plot_2D_species", xgrid₃, sol₃; steps=5)
+	images_for_gif(spec, "contour_plot_2Danisotropic_species", xgrid₄, sol₄; steps=5)
 end
+
+# ╔═╡ a52838f9-3c48-4653-a7c1-3be6af3109ce
+md"""
+### Problems
+We have not gotten the anisotropic solution or the 2D problem setup to give the same solution as they have in the paper, research is still ongoing with what would cause this error.
+"""
+
+# ╔═╡ 82e15118-5168-488f-a010-ce1eee2e5a53
+md"""
+# Performance improvement
+To improve performance of the discrete solution we could use better time-stepping methods such as theta-scheme.
+"""
 
 # ╔═╡ 6b1e8f04-ae8b-4758-86d9-b947e1620c0d
 md"""
@@ -554,7 +937,7 @@ DataFrames = "~1.3.2"
 ExtendableGrids = "~0.9.1"
 GridVisualize = "~0.5.1"
 LaTeXStrings = "~1.3.0"
-Plots = "~1.26.0"
+Plots = "~1.27.0"
 PlutoUI = "~0.7.37"
 PlutoVista = "~0.8.12"
 PyCall = "~1.93.1"
@@ -1140,9 +1523,9 @@ version = "0.21.3"
 
 [[JSON3]]
 deps = ["Dates", "Mmap", "Parsers", "StructTypes", "UUIDs"]
-git-tree-sha1 = "175b6ff26cd0fa01dd60021ce76bbdefdf91e4a0"
+git-tree-sha1 = "8c1f668b24d999fb47baf80436194fdccec65ad2"
 uuid = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
-version = "1.9.3"
+version = "1.9.4"
 
 [[JpegTurbo_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1258,9 +1641,9 @@ uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 
 [[LogExpFunctions]]
 deps = ["ChainRulesCore", "ChangesOfVariables", "DocStringExtensions", "InverseFunctions", "IrrationalConstants", "LinearAlgebra"]
-git-tree-sha1 = "3f7cb7157ef860c637f3f4929c8ed5d9716933c6"
+git-tree-sha1 = "58f25e56b706f95125dcb796f39e1fb01d913a71"
 uuid = "2ab3a3ac-af41-5b50-aa03-7779005ae688"
-version = "0.3.7"
+version = "0.3.10"
 
 [[Logging]]
 uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
@@ -1386,9 +1769,9 @@ version = "8.44.0+0"
 
 [[PDMats]]
 deps = ["LinearAlgebra", "SparseArrays", "SuiteSparse"]
-git-tree-sha1 = "7e2166042d1698b6072352c74cfd1fca2a968253"
+git-tree-sha1 = "e8185b83b9fc56eb6456200e873ce598ebc7f262"
 uuid = "90014a1f-27ba-587c-ab20-58faa44d9150"
-version = "0.11.6"
+version = "0.11.7"
 
 [[Parameters]]
 deps = ["OrderedCollections", "UnPack"]
@@ -1426,15 +1809,15 @@ version = "2.0.1"
 
 [[PlotUtils]]
 deps = ["ColorSchemes", "Colors", "Dates", "Printf", "Random", "Reexport", "Statistics"]
-git-tree-sha1 = "6f1b25e8ea06279b5689263cc538f51331d7ca17"
+git-tree-sha1 = "60e9def572717de8345d65a1b913df0fd3903621"
 uuid = "995b91a9-d308-5afd-9ec6-746e21dbc043"
-version = "1.1.3"
+version = "1.1.4"
 
 [[Plots]]
-deps = ["Base64", "Contour", "Dates", "Downloads", "FFMPEG", "FixedPointNumbers", "GR", "GeometryBasics", "JSON", "Latexify", "LinearAlgebra", "Measures", "NaNMath", "PlotThemes", "PlotUtils", "Printf", "REPL", "Random", "RecipesBase", "RecipesPipeline", "Reexport", "Requires", "Scratch", "Showoff", "SparseArrays", "Statistics", "StatsBase", "UUIDs", "UnicodeFun", "Unzip"]
-git-tree-sha1 = "23d109aad5d225e945c813c6ebef79104beda955"
+deps = ["Base64", "Contour", "Dates", "Downloads", "FFMPEG", "FixedPointNumbers", "GR", "GeometryBasics", "JSON", "Latexify", "LinearAlgebra", "Measures", "NaNMath", "Pkg", "PlotThemes", "PlotUtils", "Printf", "REPL", "Random", "RecipesBase", "RecipesPipeline", "Reexport", "Requires", "Scratch", "Showoff", "SparseArrays", "Statistics", "StatsBase", "UUIDs", "UnicodeFun", "Unzip"]
+git-tree-sha1 = "9213b4c18b57b7020ee20f33a4ba49eb7bef85e0"
 uuid = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
-version = "1.26.0"
+version = "1.27.0"
 
 [[PlutoUI]]
 deps = ["AbstractPlutoDingetjes", "Base64", "ColorTypes", "Dates", "Hyperscript", "HypertextLiteral", "IOCapture", "InteractiveUtils", "JSON", "Logging", "Markdown", "Random", "Reexport", "UUIDs"]
@@ -1456,9 +1839,9 @@ version = "1.4.0"
 
 [[Preferences]]
 deps = ["TOML"]
-git-tree-sha1 = "de893592a221142f3db370f48290e3a2ef39998f"
+git-tree-sha1 = "d3538e7f8a790dc8903519090857ef8e1283eecd"
 uuid = "21216c6a-2e73-6563-6e65-726566657250"
-version = "1.2.4"
+version = "1.2.5"
 
 [[PrettyTables]]
 deps = ["Crayons", "Formatting", "Markdown", "Reexport", "Tables"]
@@ -2041,7 +2424,15 @@ version = "0.9.1+5"
 # ╟─b08f1ba2-ff89-4d25-84cf-ef100cde2d91
 # ╟─eb03ae91-d8bf-43cd-87b4-9a925b5051f4
 # ╟─60a981c1-5e6b-459b-b7b1-dab2b94e1881
-# ╠═3ee2e07c-3463-470b-a478-bc7e2464389d
+# ╟─3ee2e07c-3463-470b-a478-bc7e2464389d
+# ╟─2a0bc645-8dec-454e-9eb8-623c7e95a20c
+# ╟─2cb6b44b-6236-40e3-a945-4bb8df3cae1e
+# ╟─d7aeab82-eab7-44f1-8586-4504287a4dfc
+# ╟─042f94d9-04d0-4a03-b3b6-375f8b22953b
+# ╟─ac978664-28a5-40bb-8a99-4efbf3c6c6fe
+# ╟─f7b01945-65e0-4057-b84d-dcd298ce766c
+# ╟─63d685c1-dcd1-454f-8e56-f697e7aca8fb
+# ╟─3e1c814e-f69d-4839-8ca1-ed03952188a8
 # ╠═71943829-1f12-46ce-8347-99a4aebac3d4
 # ╠═d3b4bdc4-f17f-4a83-9ddc-bfdd1ea7f26c
 # ╠═d37259c3-f3f7-443c-87fb-497f700e6bac
@@ -2052,15 +2443,16 @@ version = "0.9.1+5"
 # ╠═47c78a62-d0a1-4120-9303-35a9d7d20ee9
 # ╠═dea5cc0a-a112-494a-85ba-0fcf15d6c2e6
 # ╠═6cb8de00-62a6-46b0-a367-21a282e4ff89
+# ╠═1fc8a5f0-fa99-44c6-a19a-3334e20eec15
 # ╠═31017d7c-d875-442f-b77c-9abc828f42d6
 # ╠═6ef697e9-a4b8-446e-bbb8-b577cea0161d
 # ╠═d5315aef-978d-447f-85dc-a3becdc33078
 # ╠═f19b980c-7d6c-41c6-99af-8475f7aa72db
 # ╠═8c168042-b17e-434f-b5da-423875d6cc37
-# ╠═7699e496-d0bd-4c39-9398-b90649694ea8
-# ╠═78e23bc8-da0f-4ba8-85ca-4d6f4b6d5538
-# ╠═88540b7a-90da-45a6-9025-fccafa4a19ff
+# ╠═4db8713f-e828-4bc7-a1a1-8c933ef8e4d5
+# ╠═010d60c7-900e-46f4-ae87-2249abd17c16
 # ╠═45c86875-d68a-40d3-b340-d2b4af94e849
+# ╟─299c8cf9-4a7e-418c-9bf4-fa8e42da72e6
 # ╠═d477647c-de1f-4dbf-b982-c1577adcf398
 # ╠═6fcf5e8c-c44e-4684-b512-cef6031ad66b
 # ╠═882e929d-0188-4907-92ef-d9066b92148c
@@ -2068,15 +2460,43 @@ version = "0.9.1+5"
 # ╠═051c235c-ad26-4b29-81c0-6e3e281bb61e
 # ╠═7d2a9f6a-9063-4bc4-bf90-b18dcb30ca9e
 # ╠═e7587ca1-7116-4526-8d45-4c76941a98c7
+# ╟─1bda87c6-5e03-4e0a-a029-47d541c3f06a
 # ╠═a24ebb01-038c-4107-b730-887a86a14fe7
 # ╠═0edfe024-2786-4570-96f2-f02a083553f6
+# ╠═17684f81-f302-4448-b86e-4f0457ad17ac
 # ╠═4becbe30-d7a1-4949-a494-7f9bba8ed4c9
+# ╠═b01448fa-c503-4f30-9414-c091bc58b21a
+# ╟─2c2c89f8-5d82-4f43-a679-0b3c5c379f30
+# ╠═552af2fb-d17e-4c06-b3f9-856731652f1f
+# ╟─7dec0320-4406-4360-9e2c-0f0ca2db0afe
+# ╠═5d46a365-86f1-41a2-b171-600ad4d92549
+# ╟─9e678ba2-a061-4482-b647-1614494f0b14
+# ╠═6ec24d7f-51b4-48f7-8435-5075e4677ee9
+# ╟─324ecfc7-cdf6-4e2b-9e56-78a9baae0263
 # ╠═c1d04237-1696-4c08-9e78-7e7c0d659d0b
-# ╠═8bf36fd9-abf0-49fc-b4f3-0f10ba1ade1f
 # ╠═c7106eb9-b54d-4473-8ff4-2b8707260cec
+# ╟─c5bbd72e-9e33-496c-8d7a-31b1bf02c00f
+# ╠═ac916c5d-0ab5-44d5-8b01-c36c0679ff75
+# ╟─07a2808d-c680-4118-b9de-23f69369888b
+# ╠═471473df-ac49-421f-a371-af88e92f14db
+# ╟─a4b916ca-142b-4e26-ad9c-16d5a03acfe9
+# ╠═1dea2df4-2124-4052-bb81-45733cfc5de7
+# ╟─d65e72f0-172d-494f-866f-5b9541035b6f
+# ╠═36854b9a-39f3-4fca-94da-f9f97cee1663
+# ╠═65931b4e-2698-4ddc-990f-3d205bf0c686
+# ╟─cffaed3f-b4bd-4507-a62f-91831f9729b4
+# ╠═841f7675-fc4a-43f4-9ab6-1a20caf3315c
+# ╟─8febdb97-da8f-431b-a0ca-95b857ab138e
+# ╠═f41540ac-e2ce-4fbf-9e0c-08a860a9a41d
+# ╟─22f143da-3dbc-4566-a99d-470fb5e87047
+# ╠═6c1126d4-33ce-4e10-9a2c-b815b144498b
+# ╠═81ba9ddf-e84f-463a-9ef7-dc574bf1b940
+# ╠═6f9637b0-f2a1-426b-b5cb-a3a7764bcf88
 # ╠═557cc2d0-780a-4f6f-b5c9-6ae9bc31b014
 # ╠═33539ff5-9634-457d-991e-6af44184ce62
-# ╠═6b1e8f04-ae8b-4758-86d9-b947e1620c0d
-# ╠═510778f6-f368-4bc9-9543-76d0576dbe7a
+# ╟─a52838f9-3c48-4653-a7c1-3be6af3109ce
+# ╟─82e15118-5168-488f-a010-ce1eee2e5a53
+# ╟─6b1e8f04-ae8b-4758-86d9-b947e1620c0d
+# ╟─510778f6-f368-4bc9-9543-76d0576dbe7a
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
