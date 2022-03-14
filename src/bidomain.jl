@@ -365,6 +365,13 @@ In total, for the discretization of the problem, we are left with a nonlinear sy
 Where $i$ is the current time step.
 """
 
+# ╔═╡ b79e3858-2208-4cf9-9834-c9bc1c8e3486
+md"""
+# Possible solution methods
+
+To solve the resulting nonlinear problem we get after discretizing we can use iterative solvers such as Newtons method, Raphson etc.
+"""
+
 # ╔═╡ 3e1c814e-f69d-4839-8ca1-ed03952188a8
 md"""
 # Discrete solution using VoronoiFVM
@@ -898,7 +905,11 @@ We have not gotten the anisotropic solution or the 2D problem setup to give the 
 # ╔═╡ 82e15118-5168-488f-a010-ce1eee2e5a53
 md"""
 # Performance improvement
-To improve performance of the discrete solution we could use better time-stepping methods such as theta-scheme.
+To improve performance of the discrete solution we could use better time-stepping method.
+
+Another idea is to use explicit methods, which would give a linear equation to solve instead of a nonlinear equation, but as we discussed earlier we would have stability problems.
+
+To improve performance we could use some control on the solver
 """
 
 # ╔═╡ 6b1e8f04-ae8b-4758-86d9-b947e1620c0d
@@ -2432,6 +2443,7 @@ version = "0.9.1+5"
 # ╟─ac978664-28a5-40bb-8a99-4efbf3c6c6fe
 # ╟─f7b01945-65e0-4057-b84d-dcd298ce766c
 # ╟─63d685c1-dcd1-454f-8e56-f697e7aca8fb
+# ╟─b79e3858-2208-4cf9-9834-c9bc1c8e3486
 # ╟─3e1c814e-f69d-4839-8ca1-ed03952188a8
 # ╠═71943829-1f12-46ce-8347-99a4aebac3d4
 # ╠═d3b4bdc4-f17f-4a83-9ddc-bfdd1ea7f26c
