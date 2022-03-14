@@ -28,30 +28,42 @@ Some abstrac
 \end{abstract}
 
 \section{Introduction} % A bit extraneous with an abstract. Remove one.
+
+
+
+This document shall document and implement our strategy for solving the "bidomain problem". It introduces the problem at hand, illustrates our discretization strategy, displays our implementation of this strategy, and visualizes the resulting solutions to the problem.
+The solution to the problem, once set up, is calculated by use of the VoronoiFVM.jl Julia package [1]. This package is available at **https://github.com/j-fu/VoronoiFVM.jl**.
+The bidomain problem was chosen as the project examination topic by our group as part of the Scientific Computing course at the Teschnische Universität Berlin. This work was performed during the Winter Semester 2021/2022.
+\section{Bidomain problem}
+In summary, the bidomain problem is a system of partial differential equations modeling the propagation of electric signals throughout cardiac tissue[2]. Before going into more detail, it is convenient to provide some context on the lower fidelity, but simpler, "monodomain problem". 
+The monodomain problem models cardiac tissue's electircal properties by treating it as an intracellular region separated from a extracellular region (the electrical ground) by a membrane. This approach neglects current flow external to the cells [2].
+The bidomain model then rectifies this issue by treating the intracellular and extracellular regions with their own current flows, linked by transmembrane potential. This allows the regions to be modeled with separate boundary conditions and for the application of external stimuli [2].
+This document will use the formulation of the biodomain problem provided in Ether and Bourgalt, *Semi-Implicit Time-Discretization Schemes For The Bidomain Model* [3].
+
 \section{Formulation of Bidomain problem}
-Some text from \cite{eth_bou}
+
 \section{Discretization}
 \subsection{Finite Volume Space Discretization}
 \subsection{Discretization of equation 1}
 Integrate over a control volume $\omega_k$:
 \begin{equation}
-   0=\int_{\omega_k}\frac{1}{\epsilon}f(u,v)d\omega +
+   \int_{\omega_k}\frac{\partial u}{\partial t}=\int_{\omega_k}\frac{1}{\epsilon}f(u,v)d\omega +
        \int_{\omega_k}\nabla \cdot (\sigma_i \nabla u)d\omega + \int_{\omega_k}\nabla \cdot (\sigma_i \nabla u_e)d\omega
 \end{equation}
 Apply Gauss' thereom to the two divergence terms:
 \begin{equation}
-    0=\int_{\omega_k}\frac{1}{\epsilon}f(u,v)d\omega +
+    \int_{\omega_k}\frac{\partial u}{\partial t} =\int_{\omega_k}\frac{1}{\epsilon}f(u,v)d\omega +
     \int_{d\omega_k}\sigma_i \nabla u \cdot \overrightarrow{n}ds +
     \int_{d\omega_k}\sigma_i \nabla u_e \cdot \overrightarrow{n}ds
 \end{equation}
 Convert the surface integrals over the edge of the control volume into a sum of an integral over each side, as our Voronoi cell control volumes are polygons. Additionally, introduce a separate term for the surface integral over the specific case of sides that are boundary conditions.
 
 \begin{align*}
-    0 &=\int_{\omega_k}\frac{1}{\epsilon}f(u,v)d\omega \\ 
-    &+ \sum_{l \in N_k}\int_{s_{kl}} \sigma_i \nabla u \cdot \overrightarrow{n_{kl}}ds +
-    \sum_{m \in B_k}\int_{\gamma_{kl}} \sigma_i \nabla u \cdot \overrightarrow{n_{m}}ds \\
-    &+ \sum_{l \in N_k}\int_{s_{kl}} \sigma_i \nabla u_e \cdot \overrightarrow{n_{kl}}ds +
-    \sum_{m \in B_k}\int_{\gamma_{kl}} \sigma_i \nabla u_e \cdot \overrightarrow{n_{m}}ds
+    \int_{\omega_k}\frac{\partial u}{\partial t} &=\int_{\omega_k}\frac{1}{\epsilon}f(u,v)d\omega \\ 
+    &+ \sum_{l \in N_k}\int_{s_{kl}} \sigma_i \nabla u \cdot \overrightarrow{n}_{kl}ds +
+    \sum_{m \in B_k}\int_{\gamma_{kl}} \sigma_i \nabla u \cdot \overrightarrow{n}_{m}ds \\
+    &+ \sum_{l \in N_k}\int_{s_{kl}} \sigma_i \nabla u_e \cdot \overrightarrow{n}_{kl}ds +
+    \sum_{m \in B_k}\int_{\gamma_{kl}} \sigma_i \nabla u_e \cdot \overrightarrow{n}_{m}ds
 \end{align*}
 Exploiting the admissibility condition, approximate the dot products using finite differences:
 \begin{equation}
@@ -60,7 +72,7 @@ Exploiting the admissibility condition, approximate the dot products using finit
 \end{equation}
 Substitute this approximation in and replace the integrals with a simple multiplication by the length of the cell border. Additionally expanding $f(u,v)$:
 \begin{align*}
-0 &= \int_{w_k}\frac{1}{\epsilon}(u - \frac{u^3}{3} - v)d\omega\\
+|\omega_k|\frac{\partial u}{\partial t} &= \int_{w_k}\frac{1}{\epsilon}(u - \frac{u^3}{3} - v)d\omega\\
 &+ \sum_{l \in N_k} |s_{kl}| \sigma_i ( \frac{u_k - u_l}{|x_k - x_l|} ) + 
 \sum_{m \in B_k} |\gamma_{km}| \sigma_i ( \frac{u_k - u_l}{|x_k - x_l|} )  \\
 &+ \sum_{l \in N_k} |s_{kl}| \sigma_i ( \frac{u_{e_k} - u_{e_l}}{|x_k - x_l|} ) + 
@@ -68,14 +80,14 @@ Substitute this approximation in and replace the integrals with a simple multipl
 \end{align*}
 
 Combine terms, and note the first integral simply becomes a multiplication by $|\omega_k|$:
-\begin{align*}
-0 &= \frac{|\omega_k|}{\epsilon}(u - \frac{u^3}{3} - v)\\
+\begin{align*}e
+|\omega_k|\frac{\partial u}{\partial t} &= \frac{|\omega_k|}{\epsilon}(u - \frac{u^3}{3} - v)\\
 &+ \sum_{l \in N_k} |s_{kl}| \sigma_i ( \frac{u_k - u_l + u_{e_k} - u_{e_l}}{|x_k - x_l|} ) \\
 &+ \sum_{m \in B_k} |\gamma_{km}| \sigma_i ( \frac{u_k - u_l + u_{e_k} - u_{e_l}}{|x_k - x_l|} ) 
 \end{align*}
 Move the boundary terms to the other side and organize so it is on the right:
 \begin{align*}
-\sum_{l \in N_k} |s_{kl}| \sigma_i ( \frac{u_k - u_l + u_{e_k} - u_{e_l}}{|x_k - x_l|} )
+|\omega_k|\frac{\partial u}{\partial t} + \sum_{l \in N_k} |s_{kl}| \sigma_i ( \frac{u_k - u_l + u_{e_k} - u_{e_l}}{|x_k - x_l|} )
 &+ \frac{|\omega_k|}{\epsilon}(u - \frac{u^3}{3} - v)
 = -\sum_{m \in B_k} |\gamma_{km}| \sigma_i ( \frac{u_k - u_l + u_{e_k} - u_{e_l}}{|x_k - x_l|} ) 
 \end{align*}
@@ -93,8 +105,8 @@ Apply Gauss' theorem:
 \end{align*}
 Again convert these terms to a sum of the integral over each side of the volume, and add terms for the boundary conditions:
 \begin{align*}
-    0 &= \sum_{l \in N_k}\int_{s_{kl}} \sigma_i \nabla u \cdot \overrightarrow{n_{kl}}ds +
-    \sum_{m \in B_k}\int_{\gamma_{kl}} \sigma_i \nabla u \cdot \overrightarrow{n_{m}}ds \\
+    0 &= \sum_{l \in N_k}\int_{s_{kl}} \sigma_i \nabla u \cdot \overrightarrow{n}_{kl}ds +
+    \sum_{m \in B_k}\int_{\gamma_{kl}} \sigma_i \nabla u \cdot \overrightarrow{n}_{m}ds \\
     &+ \sum_{l \in N_k}\int_{s_{kl}} (\sigma_i + \sigma_e) \nabla u_e \cdot \overrightarrow{n}_{kl}ds +
     \sum_{m \in B_k}\int_{\gamma_{kl}} (\sigma_i + \sigma_e)\nabla u_e \cdot \overrightarrow{n}_{m}ds
 \end{align*}
@@ -130,7 +142,6 @@ The integral is simply a multiplication by the area of the volume:
 
 This concludes the space discretization.
 \subsection{Time Discretization}
-The time discretization is achieved by discretizing in time the third equation which is the only one dependent on time. 
 
 There are a few possibilities for the time discretization:
 
@@ -140,22 +151,32 @@ With an implicit euler we approximate $\frac{\partial v}{\partial t}$ by a finit
 TODO: I think part of the answer here is that it is a coupled partial differential equation. We can't explicitly solve for v in this timestep because it will be in terms of u - which itself is dependent on v. 
 
 i.e. There is no 
-\subsubsection{Implicit Explicit Methods (IMEX)}
+%\subsubsection{Implicit Explicit Methods (IMEX)}
+%
+%Here we use an implicit Euler method.%
+%
+%This is done for each time step. The resulting discretized system is solved at each time step.
 
-Here we use an implicit Euler method.
 
-This is done for each time step. The resulting discretized system is solved at each time step.
-
-
+We approximate:
 
 \begin{align*}
-|\omega_k|\frac{\partial v}{\partial t} - \epsilon |\omega_k| (u + \beta - \varphi v) = 0
+ |\omega_k|\frac{\partial u}{\partial t} \approx \frac{u_i - u_{i-1}}{\Delta t}  
 \end{align*}
-We approximate:
+_ 
 \begin{align*}
  |\omega_k|\frac{\partial v}{\partial t} \approx \frac{v_i - v_{i-1}}{\Delta t}  
 \end{align*}
+
 Where $i$ is the current time step. 
+The first equation becomes:
+
+\begin{align*}
+|\omega_k|\frac{\partial u}{\partial t} \approx \frac{u_i - u_{i-1}}{\Delta t}   + \sum_{l \in N_k} |s_{kl}| \sigma_i ( \frac{u_k - u_l + u_{e_k} - u_{e_l}}{|x_k - x_l|} )
+&+ \frac{|\omega_k|}{\epsilon}(u - \frac{u^3}{3} - v)
+= -\sum_{m \in B_k} |\gamma_{km}| \sigma_i ( \frac{u_k - u_l + u_{e_k} - u_{e_l}}{|x_k - x_l|} ) 
+\end{align*}
+
 
 The third equation, discretized in time as well as space, is then:
 
