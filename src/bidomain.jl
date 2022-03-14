@@ -269,7 +269,7 @@ function get_σₛ(σᵢ,σₑ,edge)
 	n2 = edge.coord[:,edge.node[2]]
 	x = abs(n1[1] - n2[1]); y = abs(n1[2] - n2[2])
 	θ = atan(y/x)
-	l = [1 1]; r = [cos(θ);sin(θ)]
+	l = [1 1]; r = [sin(θ);cos(θ)]
 	σᵢ_θ = (l*σᵢ*r)[1]; σₑ_θ = (l*σₑ*r)[1]
 	σᵢ_θ, σₑ_θ
 end
@@ -297,24 +297,26 @@ function create_physics(σᵢ_orig, σₑ_orig; anisotropic=false)
 end
 
 # ╔═╡ d5315aef-978d-447f-85dc-a3becdc33078
-function save_initial(init)
+function save_initial(init, filename)
 	mkpath("../csv")
 	df = DataFrame(init, :auto)
-	CSV.write("../csv/initial_2D.csv", df)
+	CSV.write("../csv/$filename", df)
 end
 
 # ╔═╡ f19b980c-7d6c-41c6-99af-8475f7aa72db
-function get_initial_data()
-	Array(DataFrame(CSV.File("../csv/initial_2D.csv")))
+function get_initial_data(filename)
+	Array(DataFrame(CSV.File("../csv/$filename")))
 end
 
 # ╔═╡ 6ef697e9-a4b8-446e-bbb8-b577cea0161d
-function initial_cond(sys, xgrid, Δt, Tinit_solve, dim, initial2D, use_csv)
+function initial_cond(sys, xgrid, Δt, Tinit_solve, 
+		dim, initial2D, use_csv, anisotropic)
 	init = unknowns(sys)
 	U = unknowns(sys)
+	filename="initial_2D_"*(anisotropic ? "_anisotropic" : "")*".csv"
 	if dim==2 && initial2D
 		if use_csv
-			init = get_initial_data()
+			init = get_initial_data(filename)
 		else
 			inival = map(u⃗₀_2D, xgrid)
 			init .= [tuple[k] for tuple in inival, k in 1:3]'
@@ -322,7 +324,7 @@ function initial_cond(sys, xgrid, Δt, Tinit_solve, dim, initial2D, use_csv)
 				solve!(U, init, sys; tstep=Δt)
 				init .= U
 			end
-			save_initial(init)
+			save_initial(init, filename)
 		end
 	else
 		inival = map(u⃗₀, xgrid)
@@ -360,7 +362,8 @@ function bidomain(;N=100, dim=1, Δt=1e-3, T=30, Plotter=Plots,
 	end
 
 
-	init = initial_cond(sys, xgrid, Δt, Tinit_solve, dim, initial2D, use_csv)
+	init = initial_cond(sys, xgrid, Δt, Tinit_solve, 
+		dim, initial2D, use_csv, anisotropic)
 	U = unknowns(sys)
 
 	SolArray = copy(init)
@@ -378,14 +381,14 @@ end
 # ╔═╡ 8c168042-b17e-434f-b5da-423875d6cc37
 species = [L"u", L"u_e", L"v"]
 
-# ╔═╡ 78e23bc8-da0f-4ba8-85ca-4d6f4b6d5538
-#gridx, gridt, sol1, vis1 = bidomain(N=(3,3),dim=2,T=1,Δt=10e-1);
+# ╔═╡ 4db8713f-e828-4bc7-a1a1-8c933ef8e4d5
+bidomain(dim=2,N=(3,3),T=1,Δt=10e-1);
 
 # ╔═╡ 010d60c7-900e-46f4-ae87-2249abd17c16
 begin
 	dim = 1; N = 1000; Δt = 1e-1;
 	xgrid, tgrid, sol, vis = bidomain(dim=dim, N=N, T=T, Δt=Δt);
-end
+end;
 
 # ╔═╡ 45c86875-d68a-40d3-b340-d2b4af94e849
 function plot_at_t(t,vis,xgrid,sol)
@@ -475,18 +478,19 @@ begin
 end;
 
 # ╔═╡ 0edfe024-2786-4570-96f2-f02a083553f6
-function contour_2d_at_t(spec, t, Δt, xgrid, sol)
+function contour_2d_at_t(spec, t, Δt, xgrid, sol, title)
 	tₛ = Int16(round(t/Δt))+1
 	p = scalarplot(
 		xgrid,sol[spec,:,tₛ], Plotter=PyPlot, colormap=:hot, 
-		title="2D problem with 1D problem setup for "*species[spec]*
-		" at t="*string(t),
-		colorlevels=100, isolines=0)
+		title=title, colorlevels=100, isolines=0)
 	p.set_size_inches(7,7)
 	PyPlot.xlabel(L"x")
 	PyPlot.ylabel(L"y")
 	p
 end
+
+# ╔═╡ fba239cb-4a22-45b0-9323-a940e23b07d3
+"2D problem with 1D problem setup for "*species[spec]*" at t="*string(t)
 
 # ╔═╡ 17684f81-f302-4448-b86e-4f0457ad17ac
 function contour_subplots(spec, times, xgrid, sol; Δt=1e-1, save=false)
@@ -505,7 +509,8 @@ function contour_subplots(spec, times, xgrid, sol; Δt=1e-1, save=false)
 end
 
 # ╔═╡ 4becbe30-d7a1-4949-a494-7f9bba8ed4c9
-contour_2d_at_t(2,3,Δt₂,xgrid₂,sol₂)
+contour_2d_at_t(2,3,Δt₂,xgrid₂,sol₂,
+	"2D problem with 1D problem setup for "*species[spec]*" at t="*string(t))
 
 # ╔═╡ c1d04237-1696-4c08-9e78-7e7c0d659d0b
 begin
@@ -515,7 +520,8 @@ begin
 end;
 
 # ╔═╡ c7106eb9-b54d-4473-8ff4-2b8707260cec
-contour_2d_at_t(2,21,Δt₃,xgrid₃,sol₃)
+contour_2d_at_t(2,21,Δt₃,xgrid₃,sol₃,
+	"2D problem for "*species[spec]*" at t="*string(t))
 
 # ╔═╡ 36854b9a-39f3-4fca-94da-f9f97cee1663
 begin
@@ -526,7 +532,8 @@ begin
 end;
 
 # ╔═╡ 65931b4e-2698-4ddc-990f-3d205bf0c686
-contour_2d_at_t(2,21,Δt₄,xgrid₄,sol₄);
+contour_2d_at_t(2,21,Δt₄,xgrid₄,sol₄, 
+	"2D problem with anisotropic conductivity for "*species[spec]*" at t="*string(t))
 
 # ╔═╡ 7382dc48-0310-4070-b84f-bcc5217225d5
 md"""
@@ -2116,7 +2123,7 @@ version = "0.9.1+5"
 # ╠═d5315aef-978d-447f-85dc-a3becdc33078
 # ╠═f19b980c-7d6c-41c6-99af-8475f7aa72db
 # ╠═8c168042-b17e-434f-b5da-423875d6cc37
-# ╠═78e23bc8-da0f-4ba8-85ca-4d6f4b6d5538
+# ╠═4db8713f-e828-4bc7-a1a1-8c933ef8e4d5
 # ╠═010d60c7-900e-46f4-ae87-2249abd17c16
 # ╠═45c86875-d68a-40d3-b340-d2b4af94e849
 # ╠═d477647c-de1f-4dbf-b982-c1577adcf398
@@ -2128,6 +2135,7 @@ version = "0.9.1+5"
 # ╠═e7587ca1-7116-4526-8d45-4c76941a98c7
 # ╠═a24ebb01-038c-4107-b730-887a86a14fe7
 # ╠═0edfe024-2786-4570-96f2-f02a083553f6
+# ╠═fba239cb-4a22-45b0-9323-a940e23b07d3
 # ╠═17684f81-f302-4448-b86e-4f0457ad17ac
 # ╠═4becbe30-d7a1-4949-a494-7f9bba8ed4c9
 # ╠═c1d04237-1696-4c08-9e78-7e7c0d659d0b
