@@ -627,6 +627,11 @@ function plot_at_t(t,vis,xgrid,sol; title="")
 	plotted_sol
 end
 
+# ╔═╡ 299c8cf9-4a7e-418c-9bf4-fa8e42da72e6
+md"""
+#### Solution to 1D problem for t=11
+"""
+
 # ╔═╡ d477647c-de1f-4dbf-b982-c1577adcf398
 plot_at_t(11,vis,xgrid,sol;title="1D problem at t=11")
 
@@ -636,7 +641,7 @@ begin
 		plot_at_t(t,vis,xgrid,sol)
 	end
 	gif(anim, "../movies/1D_solution.gif", fps=15)
-end
+end;
 
 # ╔═╡ 882e929d-0188-4907-92ef-d9066b92148c
 function plot_species_3d(spec)
@@ -736,6 +741,33 @@ end
 contour_2d_at_t(2,3,Δt₂,xgrid₂,sol₂,
 	"2D problem with 1D problem setup for "*species[2]*" at t="*string(3))
 
+# ╔═╡ b01448fa-c503-4f30-9414-c091bc58b21a
+times = [0,10,20,30];
+
+# ╔═╡ 2c2c89f8-5d82-4f43-a679-0b3c5c379f30
+md"""
+#### Solution to 2D problem with 1D problem setup for $u$:
+"""
+
+# ╔═╡ 552af2fb-d17e-4c06-b3f9-856731652f1f
+contour_subplots(1,times,xgrid₂,sol₂;Δt=Δt₂)
+
+# ╔═╡ 7dec0320-4406-4360-9e2c-0f0ca2db0afe
+md"""
+#### Solution to 2D problem with 1D problem setup for $u_e$:
+"""
+
+# ╔═╡ 5d46a365-86f1-41a2-b171-600ad4d92549
+contour_subplots(2,times,xgrid₂,sol₂;Δt=Δt₂)
+
+# ╔═╡ 9e678ba2-a061-4482-b647-1614494f0b14
+md"""
+#### Solution to 2D problem with 1D problem setup for $v$:
+"""
+
+# ╔═╡ 6ec24d7f-51b4-48f7-8435-5075e4677ee9
+contour_subplots(3,times,xgrid₂,sol₂;Δt=Δt₂)
+
 # ╔═╡ 324ecfc7-cdf6-4e2b-9e56-78a9baae0263
 md"""
 ### 2D Problem
@@ -749,8 +781,32 @@ begin
 end;
 
 # ╔═╡ c7106eb9-b54d-4473-8ff4-2b8707260cec
-contour_2d_at_t(2,30,Δt₃,xgrid₃,sol₃,
-	"2D problem for "*species[2]*" at t="*string(30))m
+contour_2d_at_t(2,5,Δt₃,xgrid₃,sol₃,
+	"2D problem for "*species[2]*" at t="*string(5))
+
+# ╔═╡ c5bbd72e-9e33-496c-8d7a-31b1bf02c00f
+md"""
+#### Solution to 2D problem for $u$:
+"""
+
+# ╔═╡ ac916c5d-0ab5-44d5-8b01-c36c0679ff75
+contour_subplots(1,times,xgrid₃,sol₃;Δt=Δt₃)
+
+# ╔═╡ 07a2808d-c680-4118-b9de-23f69369888b
+md"""
+#### Solution to 2D problem with 1D problem setup for $u_e$:
+"""
+
+# ╔═╡ 471473df-ac49-421f-a371-af88e92f14db
+contour_subplots(2,times,xgrid₃,sol₃;Δt=Δt₃)
+
+# ╔═╡ a4b916ca-142b-4e26-ad9c-16d5a03acfe9
+md"""
+#### Solution to 2D problem for $v$:
+"""
+
+# ╔═╡ 1dea2df4-2124-4052-bb81-45733cfc5de7
+contour_subplots(3,times,xgrid₃,sol₃;Δt=Δt₃)
 
 # ╔═╡ d65e72f0-172d-494f-866f-5b9541035b6f
 md"""
@@ -769,13 +825,29 @@ end;
 contour_2d_at_t(2,21,Δt₄,xgrid₄,sol₄, 
 	"2D problem with anisotropic conductivity for "*species[2]*" at t="*string(21))
 
-# ╔═╡ 7382dc48-0310-4070-b84f-bcc5217225d5
+# ╔═╡ cffaed3f-b4bd-4507-a62f-91831f9729b4
 md"""
-#### Solution to 2D problem with 1D problem setup for $u$:
+#### Solution to 2D problem with anisotropic conductivity for $u$:
 """
 
-# ╔═╡ 04207117-c0ee-4b9b-9020-7593ab0478ca
-contour_subplots(1,[0,10,20,30],xgrid₂,sol₂;Δt=Δt₂)
+# ╔═╡ 841f7675-fc4a-43f4-9ab6-1a20caf3315c
+contour_subplots(1,times,xgrid₄,sol₄;Δt=Δt₄)
+
+# ╔═╡ 8febdb97-da8f-431b-a0ca-95b857ab138e
+md"""
+#### Solution to 2D problem with anisotropic conductivity for $u_e$:
+"""
+
+# ╔═╡ f41540ac-e2ce-4fbf-9e0c-08a860a9a41d
+contour_subplots(2,times,xgrid₄,sol₄;Δt=Δt₄)
+
+# ╔═╡ 22f143da-3dbc-4566-a99d-470fb5e87047
+md"""
+#### Solution to 2D problem with anisotropic conductivity for $v$:
+"""
+
+# ╔═╡ 6c1126d4-33ce-4e10-9a2c-b815b144498b
+contour_subplots(3,times,xgrid₄,sol₄;Δt=Δt₄)
 
 # ╔═╡ 81ba9ddf-e84f-463a-9ef7-dc574bf1b940
 function save_all_subplots()
@@ -2380,6 +2452,7 @@ version = "0.9.1+5"
 # ╠═4db8713f-e828-4bc7-a1a1-8c933ef8e4d5
 # ╠═010d60c7-900e-46f4-ae87-2249abd17c16
 # ╠═45c86875-d68a-40d3-b340-d2b4af94e849
+# ╟─299c8cf9-4a7e-418c-9bf4-fa8e42da72e6
 # ╠═d477647c-de1f-4dbf-b982-c1577adcf398
 # ╠═6fcf5e8c-c44e-4684-b512-cef6031ad66b
 # ╠═882e929d-0188-4907-92ef-d9066b92148c
@@ -2392,14 +2465,31 @@ version = "0.9.1+5"
 # ╠═0edfe024-2786-4570-96f2-f02a083553f6
 # ╠═17684f81-f302-4448-b86e-4f0457ad17ac
 # ╠═4becbe30-d7a1-4949-a494-7f9bba8ed4c9
-# ╠═324ecfc7-cdf6-4e2b-9e56-78a9baae0263
+# ╠═b01448fa-c503-4f30-9414-c091bc58b21a
+# ╟─2c2c89f8-5d82-4f43-a679-0b3c5c379f30
+# ╠═552af2fb-d17e-4c06-b3f9-856731652f1f
+# ╟─7dec0320-4406-4360-9e2c-0f0ca2db0afe
+# ╠═5d46a365-86f1-41a2-b171-600ad4d92549
+# ╟─9e678ba2-a061-4482-b647-1614494f0b14
+# ╠═6ec24d7f-51b4-48f7-8435-5075e4677ee9
+# ╟─324ecfc7-cdf6-4e2b-9e56-78a9baae0263
 # ╠═c1d04237-1696-4c08-9e78-7e7c0d659d0b
 # ╠═c7106eb9-b54d-4473-8ff4-2b8707260cec
+# ╟─c5bbd72e-9e33-496c-8d7a-31b1bf02c00f
+# ╠═ac916c5d-0ab5-44d5-8b01-c36c0679ff75
+# ╟─07a2808d-c680-4118-b9de-23f69369888b
+# ╠═471473df-ac49-421f-a371-af88e92f14db
+# ╟─a4b916ca-142b-4e26-ad9c-16d5a03acfe9
+# ╠═1dea2df4-2124-4052-bb81-45733cfc5de7
 # ╟─d65e72f0-172d-494f-866f-5b9541035b6f
 # ╠═36854b9a-39f3-4fca-94da-f9f97cee1663
 # ╠═65931b4e-2698-4ddc-990f-3d205bf0c686
-# ╟─7382dc48-0310-4070-b84f-bcc5217225d5
-# ╠═04207117-c0ee-4b9b-9020-7593ab0478ca
+# ╟─cffaed3f-b4bd-4507-a62f-91831f9729b4
+# ╠═841f7675-fc4a-43f4-9ab6-1a20caf3315c
+# ╟─8febdb97-da8f-431b-a0ca-95b857ab138e
+# ╠═f41540ac-e2ce-4fbf-9e0c-08a860a9a41d
+# ╟─22f143da-3dbc-4566-a99d-470fb5e87047
+# ╠═6c1126d4-33ce-4e10-9a2c-b815b144498b
 # ╠═81ba9ddf-e84f-463a-9ef7-dc574bf1b940
 # ╠═6f9637b0-f2a1-426b-b5cb-a3a7764bcf88
 # ╠═557cc2d0-780a-4f6f-b5c9-6ae9bc31b014
