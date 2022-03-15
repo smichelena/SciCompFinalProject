@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.17.5
+# v0.17.7
 
 using Markdown
 using InteractiveUtils
@@ -11,8 +11,13 @@ begin
 	using PyCall, CSV, DataFrames
 	GridVisualize.default_plotter!(Plots);
 	pyplot();
-	TableOfContents();
+	#TableOfContents();
 end
+
+# ╔═╡ c3c70bce-7f23-477b-8f6d-d51b42ed6b2e
+md"""
+# Bidomain problem
+"""
 
 # ╔═╡ 6c8a63a7-2f5f-4e10-aca5-06d58d0eacd1
 md"""
@@ -167,8 +172,8 @@ Apply Gauss' thereom to the two divergence terms:
 ```math
 \begin{equation}
     \int_{\omega_k}\frac{\partial u}{\partial t} =\int_{\omega_k}\frac{1}{\eps}f(u,v)d\omega +
-    \int_{d\omega_k}\sigma_i \nabla u \cdot \vec{n}ds +
-    \int_{d\omega_k}\sigma_i \nabla u_e \cdot \vec{n}ds
+    \int_{\partial\omega_k}\sigma_i \nabla u \cdot \vec{n}ds +
+    \int_{\partial\omega_k}\sigma_i \nabla u_e \cdot \vec{n}ds
 \end{equation}
 ```
 Convert the surface integrals over the edge of the control volume into a sum of an integral over each side, as our Voronoi cell control volumes are polygons. Additionally, introduce a separate term for the surface integral over the specific case of sides that are boundary conditions.
@@ -191,7 +196,7 @@ Exploiting the admissibility condition, approximate the dot products using finit
 Substitute this approximation in and replace the integrals with a simple multiplication by the length of the cell border. Additionally expanding $f(u,v)$:
 ```math
 \begin{align*}
-|\omega_k|\frac{\partial u_k}{\partial t} &= \int_{w_k}\frac{1}{\eps}(u - \frac{u^3}{3} - v)d\omega\\
+|\omega_k|\frac{\partial u_k}{\partial t} &= \int_{w_k}\frac{1}{\eps}(u_k - \frac{u_k^3}{3} - v_k)d\omega\\
 &+ \sum_{l \in N_k} |s_{kl}| \sigma_i  \frac{u_k - u_l}{|x_k - x_l|}  + 
 \sum_{m \in B_k} |\gamma_{km}| \sigma_i  \frac{u_k - u_l}{|x_k - x_l|}   \\
 &+ \sum_{l \in N_k} |s_{kl}| \sigma_i  \frac{u_{e_k} - u_{e_l}}{|x_k - x_l|}  + 
@@ -208,13 +213,23 @@ Combine terms, and note the first integral simply becomes a multiplication by $|
 ```
 Move the boundary terms to the other side and organize so it is on the right:
 ```math
-\begin{align*}
+\begin{align}
 |\omega_k|\frac{\partial u_k}{\partial t} + \sum_{l \in N_k} |s_{kl}| \sigma_i \frac{u_k - u_l + u_{e_k} - u_{e_l}}{|x_k - x_l|} 
 &+ \frac{|\omega_k|}{\eps}\pth{u_k - \frac{u_k^3}{3} - v_k}
 =\\
 -\sum_{m \in B_k} |\gamma_{km}| \sigma_i  \frac{u_k - u_l + u_{e_k} - u_{e_l}}{|x_k - x_l|} 
-\end{align*}
+\end{align}
 ```
+Then discretizing in time yields:
+```math
+\begin{align}
+\frac{|\omega_k|}{\Delta t}(u_k^n - u_k^{n-1}) + \sum_{l \in N_k} |s_{kl}| \sigma_i \frac{u_k^{\theta} - u_l^{\theta} + u_{e_k}^{\theta} - u_{e_l}^{\theta}}{|x_k - x_l|} 
+&+ \frac{|\omega_k|}{\eps}\pth{u_k^{\theta} - \frac{(u_k^{\theta})^3}{3} - v_k^{\theta}}
+=\\
+-\sum_{m \in B_k} |\gamma_{km}| \sigma_i  \frac{u_k^{\theta} - u_l^{\theta} + u_{e_k}^{\theta} - u_{e_l}^{\theta}}{|x_k - x_l|} 
+\end{align}
+```
+Where $u_k^{\theta} = \theta u_k^n + (1+\theta) u_k^{n-1}$
 """
 
 # ╔═╡ 2a0bc645-8dec-454e-9eb8-623c7e95a20c
@@ -230,7 +245,7 @@ Distrbute the divergence and integrate over a volume $\omega_k$:
 Apply Gauss' theorem:
 ```math
 \begin{align*}
-0 = \int_{d\omega_k} \pth{\sigma_i \nabla u}\cdot \vec{n}ds + \int_{d\omega_k}\pth{\sigma_i + \sigma_e}\nabla u_e \cdot \vec{n} ds
+0 = \int_{\partial\omega_k} \pth{\sigma_i \nabla u}\cdot \vec{n}ds + \int_{\partial \omega_k}\pth{\sigma_i + \sigma_e}\nabla u_e \cdot \vec{n} ds
 \end{align*}
 ```
 Again convert these terms to a sum of the integral over each side of the volume, and add terms for the boundary conditions:
@@ -260,6 +275,15 @@ Move the boundary conditions to the opposite side:
 -\sum_{m \in B_k} |\gamma_{km}| (\sigma_i+\sigma_e)  \frac{u_{e_k} - u_{e_l}}{|x_k - x_l|}
 \end{align*}
 ```
+Then discretizing in time yields:
+```math
+\begin{align}
+\sum_{l \in N_k} |s_{kl}| \sigma_i \frac{u_k^{\theta} - u_l^{\theta}}{|x_k - x_l|}
++ \sum_{l \in N_k} |s_{kl}| \pth{\sigma_i+\sigma_e}  \frac{u_{e_k}^{\theta} - u_{e_l}^{\theta}}{|x_k - x_l|}  = \\
+-\sum_{m \in B_k} |\gamma_{km}| \sigma_i \frac{u_k^{\theta} - u_l^{\theta}}{|x_k - x_l|}  
+-\sum_{m \in B_k} |\gamma_{km}| (\sigma_i+\sigma_e)  \frac{u_{e_k}^{\theta} - u_{e_l}^{\theta}}{|x_k - x_l|}
+\end{align}
+```
 """
 
 # ╔═╡ 2cb6b44b-6236-40e3-a945-4bb8df3cae1e
@@ -283,6 +307,12 @@ The integral is simply a multiplication by the area of the volume:
 |\omega_k|\frac{\partial v_k}{\partial t} - \eps |\omega_k| (u_k + \beta - \varphi v_k) = 0
 \end{align*}
 ```
+Then discretizing in time yields:
+```math
+\begin{align*}
+\frac{|\omega_k|}{\Delta t}(v_k^n - v_k^{n-1}) - \eps |\omega_k| (u_k^{\theta} + \beta - \varphi v_k^{\theta}) = 0
+\end{align*}
+```
 
 This concludes the space discretization.
 """
@@ -298,50 +328,17 @@ There are a few possibilities for the time discretization:
 # ╔═╡ 042f94d9-04d0-4a03-b3b6-375f8b22953b
 md"""
 #### Implicit Euler
-With an implicit euler we approximate $\frac{\partial v}{\partial t}$ by a finite difference between the current time step and the last time step. This provides an easy implementation as all we need to implement this approximation is a storage of the previous v. We can then simply solve the resulting system to find the current v.
+With an implicit euler we approximate $\frac{\partial v}{\partial t}$ by a finite difference between the current time step and the last time step. That is, we set $\theta = 0$
+
+This provides an easy implementation as all we need to implement this approximation is a storage of the previous $\mathbf{u}$. We can then simply solve the resulting system to find the current $\mathbf{u}$.
 """
 
 # ╔═╡ ac978664-28a5-40bb-8a99-4efbf3c6c6fe
 md"""
 #### Explicit Euler
-TODO: I think part of the answer here is that it is a coupled partial differential equation. We can't explicitly solve for v in this timestep because it will be in terms of u - which itself is dependent on v. 
+The explicit or forward Euler yields difficulties when implementing because the time step size must then be much smaller than the grid resultion. In fact, According to the paper by Ethier and Bourgalt, we must have $\Delta t \in O(\min(\eps/L_f, \frac{m_i^3}{M_i^4}h^2))$ where $L_f$ is a Lipschitz constant for $f$ and where $m_i$ and $m_e$ are the 1-ellipticity constants for $u$ and $u_e$.
 
-i.e. There is no 
-"""
-
-# ╔═╡ f7b01945-65e0-4057-b84d-dcd298ce766c
-md"""
-#### 
-We approximate: 
-```math
-\begin{align*}
- |\omega_k|\frac{\partial u}{\partial t} \approx \frac{u_i - u_{i-1}}{\Delta t}  
-\end{align*}
-```
-and
-```math
-\begin{align*}
- |\omega_k|\frac{\partial v}{\partial t} \approx \frac{v_i - v_{i-1}}{\Delta t}  
-\end{align*}
-```
-Where $i$ is the current time step. 
-
-The first equation becomes:
-
-```math
-\begin{align*}
-\frac{u_{k,i} - u_{k,i-1}}{\Delta t}   + \sum_{l \in N_k} |s_{kl}| \sigma_i  \frac{u_k - u_l + u_{e_k} - u_{e_l}}{|x_k - x_l|} 
-&+ \frac{|\omega_k|}{\eps}\pth{u_k - \frac{u_k^3}{3} - v_k}
-=\\ -\sum_{m \in B_k} |\gamma_{km}| \sigma_i  \frac{u_k - u_l + u_{e_k} - u_{e_l}}{|x_k - x_l|} 
-\end{align*}
-```
-
-And the third equation, discretized in time as well as space, is then:
-```math
-\begin{align*}
-|\omega_k| \frac{v_{k,i} - v_{k,i-1}}{\Delta t}  - \eps |\omega_k| \pth{u + \beta - \varphi v} = 0
-\end{align*}
-```
+Note: This analysis is done with a system discretized using FEM instead of FVM, however, its reasonable to assume the stability results are also valid here, as the system properties remain the same irregardless the discretization method applied.
 """
 
 # ╔═╡ 63d685c1-dcd1-454f-8e56-f697e7aca8fb
@@ -350,26 +347,40 @@ md"""
 In total, for the discretization of the problem, we are left with a nonlinear system of equations that must be solved at each time step:
 
 ```math
-\begin{align*}
-\frac{u_{k,i} - u_{k,i-1}}{\Delta t}   + \sum_{l \in N_k} |s_{kl}| \sigma_i  \frac{u_k - u_l + u_{e_k} - u_{e_l}}{|x_k - x_l|} 
-+ \frac{|\omega_k|}{\eps}\pth{u_k - \frac{u_k^3}{3} - v_k}
-&=\\ -\sum_{m \in B_k} |\gamma_{km}| \sigma_i  \frac{u_k - u_l + u_{e_k} - u_{e_l}}{|x_k - x_l|} 
-\\
-\sum_{l \in N_k} |s_{kl}| \sigma_i  \frac{u_k - u_l}{|x_k - x_l|}
-+ \sum_{l \in N_k} |s_{kl}| (\sigma_i+\sigma_e)  \frac{u_{e_k} - u_{e_l}}{|x_k - x_l|}  &= \\
--\sum_{m \in B_k} |\gamma_{km}| \sigma_i  \frac{u_k - u_l}{|x_k - x_l|} 
--\sum_{m \in B_k} |\gamma_{km}| (\sigma_i+\sigma_e)  \frac{u_{e_k} - u_{e_l}}{|x_k - x_l|}\\
-|\omega_k| \frac{v_{k,i} - v_{k,i-1}}{\Delta t}  - \eps |\omega_k|\pth{u_k + \beta - \varphi v_k} &= 0
-\end{align*}
+\begin{align}
+\frac{|\omega_k|}{\Delta t}(u_k^n - u_k^{n-1}) + \sum_{l \in N_k} |s_{kl}| \sigma_i \frac{u_k^{\theta} - u_l^{\theta} + u_{e_k}^{\theta} - u_{e_l}^{\theta}}{|x_k - x_l|} 
+&+ \frac{|\omega_k|}{\eps}\pth{u_k^{\theta} - \frac{(u_k^{\theta})^3}{3} - v_k^{\theta}}
+=\\
+-\sum_{m \in B_k} |\gamma_{km}| \sigma_i  \frac{u_k^{\theta} - u_l^{\theta} + u_{e_k}^{\theta} - u_{e_l}^{\theta}}{|x_k - x_l|} 
+\end{align}
 ```
-Where $i$ is the current time step.
+```math
+\begin{align}
+\sum_{l \in N_k} |s_{kl}| \sigma_i \frac{u_k^{\theta} - u_l^{\theta}}{|x_k - x_l|}
++ \sum_{l \in N_k} |s_{kl}| \pth{\sigma_i+\sigma_e}  \frac{u_{e_k}^{\theta} - u_{e_l}^{\theta}}{|x_k - x_l|}  = \\
+-\sum_{m \in B_k} |\gamma_{km}| \sigma_i \frac{u_k^{\theta} - u_l^{\theta}}{|x_k - x_l|}  
+-\sum_{m \in B_k} |\gamma_{km}| (\sigma_i+\sigma_e)  \frac{u_{e_k}^{\theta} - u_{e_l}^{\theta}}{|x_k - x_l|}
+\end{align}
+```
+```math
+\begin{align}
+\frac{|\omega_k|}{\Delta t}(v_k^n - v_k^{n-1}) - \eps |\omega_k| (u_k^{\theta} + \beta - \varphi v_k^{\theta}) = 0
+\end{align}
+```
+This yields a system of $\sum_{k \in N}\sum_{l \in N_k}6$ nonlinear equations to be solved in each time step.
+
 """
 
 # ╔═╡ b79e3858-2208-4cf9-9834-c9bc1c8e3486
 md"""
 # Possible solution methods
 
-To solve the resulting nonlinear problem we get after discretizing we can use iterative solvers such as Newtons method, Raphson etc.
+Possible solution methods for our aquired nonlinear system could be fixpoint iteration, which gives a large area of convergence, but it could be really slow. Other methods include Newton iteration which would need a better initial guess for convergence, but the convergence near the solution is quadratic. 
+
+To simplify Newton iteration you can use dual numbers for automatic differentiation, as the VoronoiFVM package does.
+
+Additionally, for performance improvements, you can use a damped Newton scheme or even an embedded newton scheme if the problem is parameter dependant.
+
 """
 
 # ╔═╡ 3e1c814e-f69d-4839-8ca1-ed03952188a8
@@ -387,6 +398,12 @@ begin
 	σₑ_normal = 1.0
 	σᵢ_anisotropic = 25*[0.263 0; 0 0.0263]
 	σₑ_anisotropic = 25*[0.263 0; 0 0.1087]
+end;
+
+# ╔═╡ 63372ffa-406b-4eef-a9b2-394326cd35a6
+begin
+	L = 70
+	T = 30
 end;
 
 # ╔═╡ d3b4bdc4-f17f-4a83-9ddc-bfdd1ea7f26c
@@ -414,11 +431,8 @@ function fg_zeros()
 	uₙ, vₙ
 end
 
-# ╔═╡ 63372ffa-406b-4eef-a9b2-394326cd35a6
-begin
-	L = 70
-	T = 30
-end;
+# ╔═╡ b9adb394-034e-4ec5-a539-2a0e850fe1b5
+u₀, v₀ = fg_zeros()
 
 # ╔═╡ 7a7229fc-771c-4f87-a705-a29ddc546ac1
 """
@@ -438,8 +452,10 @@ function create_grid(N, dim=1)
 	end
 end
 
-# ╔═╡ b9adb394-034e-4ec5-a539-2a0e850fe1b5
-u₀, v₀ = fg_zeros()
+# ╔═╡ 761e9442-62ab-41da-86e3-cc5ef768dd49
+md"""
+	Functions for getting initial conditions
+"""
 
 # ╔═╡ 47c78a62-d0a1-4120-9303-35a9d7d20ee9
 begin
@@ -485,13 +501,23 @@ let
 	Plots.plot!(p,X,v₀,label=L"v_0",lw=lw, color="Green")
 end
 
+# ╔═╡ f4f6357b-3d1b-4730-909c-8a62ae8c284e
+md"""
+	function for getting the problem physics depending on the setup
+"""
+
+# ╔═╡ 56bec1ef-6b16-4a37-9566-f5fb4e6a2190
+md"""
+	Function for getting the anisotropic flux
+"""
+
 # ╔═╡ 1fc8a5f0-fa99-44c6-a19a-3334e20eec15
 function get_σₛ(σᵢ,σₑ,edge)
 	n1 = edge.coord[:,edge.node[1]]
 	n2 = edge.coord[:,edge.node[2]]
 	x = abs(n1[1] - n2[1]); y = abs(n1[2] - n2[2])
 	θ = atan(y/x)
-	l = [1 1]; r = [sin(θ);cos(θ)]
+	l = [1 1]; r = [cos(θ);sin(θ)]
 	σᵢ_θ = (l*σᵢ*r)[1]; σₑ_θ = (l*σₑ*r)[1]
 	σᵢ_θ, σₑ_θ
 end
@@ -548,7 +574,6 @@ function initial_cond(sys, xgrid, Δt, Tinit_solve,
 			inival = map(u⃗₀_2D, xgrid)
 			init .= [tuple[k] for tuple in inival, k in 1:3]'
 			for t ∈ 0:Δt:Tinit_solve
-				println("t:$t")
 				solve!(U, init, sys; tstep=Δt)
 				init .= U
 			end
@@ -598,7 +623,6 @@ function bidomain(;N=100, dim=1, Δt=1e-3, T=30, Plotter=Plots,
 	SolArray = copy(init)
 	tgrid = initial2D ? (Tinit_solve:Δt:T+Tinit_solve) : (0:Δt:T)
 	for t ∈ tgrid[2:end]
-		println("t:$t")
 		solve!(U, init, sys; tstep=Δt)
 		init .= U
 		SolArray = cat(SolArray, copy(U), dims=3)
@@ -609,9 +633,6 @@ end
 
 # ╔═╡ 8c168042-b17e-434f-b5da-423875d6cc37
 species = [L"u", L"u_e", L"v"]
-
-# ╔═╡ 4db8713f-e828-4bc7-a1a1-8c933ef8e4d5
-_,_,_,_,sys=bidomain(dim=2,N=(3,3),T=1,Δt=10e-1);
 
 # ╔═╡ 010d60c7-900e-46f4-ae87-2249abd17c16
 begin
@@ -664,7 +685,6 @@ function plot_species_3d(spec)
 	α = 30; β = 240
 	ax.view_init(α,β) # Adjust viewing angles
 
-	
 	PyPlot.xlabel(L"X")
 	PyPlot.ylabel(L"T")
 	PyPlot.zlabel(L"u")
@@ -846,7 +866,7 @@ md"""
 """
 
 # ╔═╡ f41540ac-e2ce-4fbf-9e0c-08a860a9a41d
-contour_subplots(2,times,xgrid₄,sol₄;Δt=Δt₄)
+contour_subplots(2, times, xgrid₄, sol₄; Δt=Δt₄)
 
 # ╔═╡ 22f143da-3dbc-4566-a99d-470fb5e87047
 md"""
@@ -883,7 +903,7 @@ function images_for_gif(spec, folder, xgrid, sol; steps=5)
 	grid_vis = GridVisualizer(resolution=(500,500), dim=2, Plotter=PyPlot)
 	for ts=2:steps:size(sol)[3]
 		scalarplot!(grid_vis,
-			xgrid,sol[spec,:,ts], Plotter=PyPlot, colormap=:hot, colorlevels=100,
+			xgrid, sol[spec,:,ts], Plotter=PyPlot, colormap=:hot, colorlevels=100,
 			colorbar=false)
 		GridVisualize.save(folder*string(ts)*".png", grid_vis)
 	end
@@ -894,22 +914,45 @@ for spec=1:3
 	images_for_gif(spec, "contour_plot_species", xgrid₂, sol₂; steps=5)
 	images_for_gif(spec, "contour_plot_2D_species", xgrid₃, sol₃; steps=5)
 	images_for_gif(spec, "contour_plot_2Danisotropic_species", xgrid₄, sol₄; steps=5)
-end
+end 	
 
 # ╔═╡ a52838f9-3c48-4653-a7c1-3be6af3109ce
 md"""
 ### Problems
-We have not gotten the anisotropic solution or the 2D problem setup to give the same solution as they have in the paper, research is still ongoing with what would cause this error.
+We have not gotten the anisotropic solution or the 2D problem setup to give the same solution as they have in the paper, we never figured out what the problem was. Possible problems includes setting the dirichlet boundary for $u_e$:
+```math
+\begin{align}
+u_e(0,0)=0
+\end{align}
+```
 """
 
 # ╔═╡ 82e15118-5168-488f-a010-ce1eee2e5a53
 md"""
 # Performance improvement
-To improve performance of the discrete solution we could use better time-stepping method.
+To improve performance and stability, as an important first step, we could use more sophisticated time-stepping approaches.
 
-Another idea is to use explicit methods, which would give a linear equation to solve instead of a nonlinear equation, but as we discussed earlier we would have stability problems.
+In the Ethier and Borgoult paper, they show a number of schemes and their performance. From this, we can conclude that employing 2nd order methods is most effective. However, we also note that IMEX yields a linear system so each time step, so even if less stable the performance advantage could be very significant when properly implemented.
 
-To improve performance we could use some control on the solver
+When it comes to parallelization, the ability to parallelize the solution of the problem at each time step would yield massive performance gains, as it amounts to performing a sequence of sparse matrix-vector multiplications. This is because solving the linear system that results in each iteration of the Newton method can be done by an iterative scheme such as CG, and these schemes also amount to performing a series of sparse matrix-vector multiplications. 
+"""
+
+# ╔═╡ a37ba608-ad5d-42ac-a878-bf08aca33c1f
+md"""
+## Optional topics, Anisotropic conductivity
+
+For the anisotropic conductivity we have different conductivity in each direction. So in the multiplication of $\sigma_i$ and $\sigma_e$ for the fluxes we need to get the contribution to the correct direction. We then need to get the angle between the two edges $x_k$ and $x_l$:
+```math
+\begin{align}
+	\theta = \cos^{-1}\pth{\frac{(x_k-x_l)\cdot e_x}{|x_k-x_l|}}
+\end{align}
+```
+which we then take the corresponding values of the tensor, and we multiply the flux with $\sigma_{i,new}$, $\sigma_{e,new}$ which we get as
+```math
+\begin{align}
+	\sigma_{new} = \sigma_{1,1}\cos(\theta)=\sigma_{2,2}\sin(\theta).
+\end{align}
+```
 """
 
 # ╔═╡ 6b1e8f04-ae8b-4758-86d9-b947e1620c0d
@@ -1647,7 +1690,7 @@ uuid = "38a345b3-de98-5d2b-a5d3-14cd9215e700"
 version = "2.36.0+0"
 
 [[LinearAlgebra]]
-deps = ["Libdl"]
+deps = ["Libdl", "libblastrampoline_jll"]
 uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 
 [[LogExpFunctions]]
@@ -1744,6 +1787,10 @@ deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "887579a3eb005446d514ab7aeac5d1d027658b8f"
 uuid = "e7412a2a-1a6e-54c0-be00-318e2571c051"
 version = "1.3.5+1"
+
+[[OpenBLAS_jll]]
+deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
+uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
 
 [[OpenLibm_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -1893,7 +1940,7 @@ deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]
 uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 
 [[Random]]
-deps = ["Serialization"]
+deps = ["SHA", "Serialization"]
 uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 
 [[RecipesBase]]
@@ -2381,6 +2428,10 @@ git-tree-sha1 = "5982a94fcba20f02f42ace44b9894ee2b140fe47"
 uuid = "0ac62f75-1d6f-5e53-bd7c-93b484bb37c0"
 version = "0.15.1+0"
 
+[[libblastrampoline_jll]]
+deps = ["Artifacts", "Libdl", "OpenBLAS_jll"]
+uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
+
 [[libfdk_aac_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "daacc84a041563f965be61859a36e17c4e4fcd55"
@@ -2428,6 +2479,7 @@ version = "0.9.1+5"
 
 # ╔═╡ Cell order:
 # ╠═bfef8ade-0b16-4a28-86d7-7e91876519c9
+# ╟─c3c70bce-7f23-477b-8f6d-d51b42ed6b2e
 # ╟─6c8a63a7-2f5f-4e10-aca5-06d58d0eacd1
 # ╟─9653fb91-a348-4c4e-9892-020211969393
 # ╟─41ad9bd9-6cea-4b44-a3af-297b21db9f67
@@ -2441,27 +2493,28 @@ version = "0.9.1+5"
 # ╟─d7aeab82-eab7-44f1-8586-4504287a4dfc
 # ╟─042f94d9-04d0-4a03-b3b6-375f8b22953b
 # ╟─ac978664-28a5-40bb-8a99-4efbf3c6c6fe
-# ╟─f7b01945-65e0-4057-b84d-dcd298ce766c
 # ╟─63d685c1-dcd1-454f-8e56-f697e7aca8fb
 # ╟─b79e3858-2208-4cf9-9834-c9bc1c8e3486
 # ╟─3e1c814e-f69d-4839-8ca1-ed03952188a8
 # ╠═71943829-1f12-46ce-8347-99a4aebac3d4
+# ╠═63372ffa-406b-4eef-a9b2-394326cd35a6
 # ╠═d3b4bdc4-f17f-4a83-9ddc-bfdd1ea7f26c
 # ╠═d37259c3-f3f7-443c-87fb-497f700e6bac
 # ╠═78326e2d-4e56-4b4a-8b4f-6f31662b3f8e
-# ╠═63372ffa-406b-4eef-a9b2-394326cd35a6
-# ╠═7a7229fc-771c-4f87-a705-a29ddc546ac1
 # ╠═b9adb394-034e-4ec5-a539-2a0e850fe1b5
+# ╠═7a7229fc-771c-4f87-a705-a29ddc546ac1
+# ╟─761e9442-62ab-41da-86e3-cc5ef768dd49
 # ╠═47c78a62-d0a1-4120-9303-35a9d7d20ee9
-# ╠═dea5cc0a-a112-494a-85ba-0fcf15d6c2e6
+# ╟─dea5cc0a-a112-494a-85ba-0fcf15d6c2e6
+# ╟─f4f6357b-3d1b-4730-909c-8a62ae8c284e
 # ╠═6cb8de00-62a6-46b0-a367-21a282e4ff89
+# ╟─56bec1ef-6b16-4a37-9566-f5fb4e6a2190
 # ╠═1fc8a5f0-fa99-44c6-a19a-3334e20eec15
 # ╠═31017d7c-d875-442f-b77c-9abc828f42d6
 # ╠═6ef697e9-a4b8-446e-bbb8-b577cea0161d
 # ╠═d5315aef-978d-447f-85dc-a3becdc33078
 # ╠═f19b980c-7d6c-41c6-99af-8475f7aa72db
 # ╠═8c168042-b17e-434f-b5da-423875d6cc37
-# ╠═4db8713f-e828-4bc7-a1a1-8c933ef8e4d5
 # ╠═010d60c7-900e-46f4-ae87-2249abd17c16
 # ╠═45c86875-d68a-40d3-b340-d2b4af94e849
 # ╟─299c8cf9-4a7e-418c-9bf4-fa8e42da72e6
@@ -2508,6 +2561,7 @@ version = "0.9.1+5"
 # ╠═33539ff5-9634-457d-991e-6af44184ce62
 # ╟─a52838f9-3c48-4653-a7c1-3be6af3109ce
 # ╟─82e15118-5168-488f-a010-ce1eee2e5a53
+# ╟─a37ba608-ad5d-42ac-a878-bf08aca33c1f
 # ╟─6b1e8f04-ae8b-4758-86d9-b947e1620c0d
 # ╟─510778f6-f368-4bc9-9543-76d0576dbe7a
 # ╟─00000000-0000-0000-0000-000000000001
